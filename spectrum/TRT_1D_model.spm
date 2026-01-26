@@ -1,0 +1,11 @@
+{
+  "name": "TRT_1D_model",
+  "comment": " Irzak",
+  "spectrum": {
+    "kind": "spectrum_1D",
+    "source": "TRT_model.dat",
+    "coordinate_system": 0,
+    "angle": 0.0,
+    "PWM": true
+  }
+}

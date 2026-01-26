@@ -1,0 +1,11 @@
+{
+  "name": "TRT_2D_real",
+  "comment": "TRT",
+  "spectrum": {
+    "kind": "scatter_spectrum",
+    "source": "TRTpam2d.dat",
+    "coordinate_system": 0,
+    "angle": 0.0,
+    "PWM": true
+  }
+}
