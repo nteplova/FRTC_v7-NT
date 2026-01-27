@@ -1,5 +1,5 @@
 {
-  "name": "TTRT_4.6 2D",
+  "name": "TTRT_4.6 1D",
   "comment": "TRT base",
   "physical_parameters": {
     "freq": 4.6,
@@ -54,9 +54,9 @@
     "upl_fix": true,
     "upl_value": 0.0,
     "fp_solver": 0,
-    "traj_len_seved": 0,
-    "max_number_of_traj": 300000,
-    "max_size_of_traj": 3000,
+    "traj_len_seved": 50,
+    "max_number_of_traj": 30000,
+    "max_size_of_traj": 30000,
     "save_interval": 0.001
   },
   "grill_parameters": {
@@ -64,7 +64,7 @@
     "Zminus": -20.0,
     "ZGapPlus": 0.0,
     "ZGapMinus": 0.0,
-    "ntet": 3,
+    "ntet": 21,
     "nnz": 100
   }
 }

@@ -1,9 +1,9 @@
 {
-  "name": "TRT_2D_real",
+  "name": "TRT_2D_real2026",
   "comment": "TRT",
   "spectrum": {
     "kind": "scatter_spectrum",
-    "source": "TRTpam2d.dat",
+    "source": "TRTpam26s2deps-5.dat",
     "coordinate_system": 0,
     "angle": 0.0,
     "PWM": true
