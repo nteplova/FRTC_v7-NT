@@ -130,6 +130,11 @@ subroutine init_trajectories(iw0, spectr)
         tet_count = tet_count + 1
         do inz = 1, spectr%size
             number_of_trajectories = number_of_trajectories+1
+            if (number_of_trajectories>max_number_of_traj) then
+                print *, "number_of_trajectories = ", number_of_trajectories
+                print *, "The limit on the number of trajectories has been exceeded"
+                stop
+            endif     
             current_trajectory => trajectories(number_of_trajectories)
             point = spectr%data(inz)
             call current_trajectory%init(tetin, inz)
