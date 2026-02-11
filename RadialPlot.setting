@@ -1,0 +1,47 @@
+{
+  "title": "Radial Data",
+  "show_grid": true,
+  "show_axis_labels": true,
+  "shape": "2x2",
+  "x_axis": "rho",
+  "x_label": "Value [arb. unit]",
+  "sub_plots": [
+    {
+      "name": "ax1",
+      "title": "профили токов",
+      "y_label": "Value [arb. unit]",
+      "data": [
+        "J",
+        "Johm",
+        "Jlh"
+      ]
+    },
+    {
+      "name": "ax2",
+      "title": "профили E",
+      "y_label": "Value [arb. unit]",
+      "data": [
+        "E"
+      ]
+    },
+    {
+      "name": "ax3",
+      "title": "профили мощности",
+      "y_label": "Value [arb. unit]",
+      "data": [
+        "Plh",
+        "Poh"
+      ]
+    },
+    {
+      "name": "ax4",
+      "title": "профили температуры",
+      "y_label": "Value [arb. unit]",
+      "data": [
+        "Te",
+        "Ti",
+        "Ne"
+      ]
+    }
+  ]
+}

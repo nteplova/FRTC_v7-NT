@@ -20,7 +20,7 @@
     "kv": 30
   },
   "numerical_parameters": {
-    "nr": 100,
+    "nr": 30,
     "hmin1": 1e-6,
     "rrange": 0.0001,
     "eps": 1e-6,
@@ -32,9 +32,9 @@
     "pchm": 0.2,
     "pabs": 0.01,
     "pgiter": 0.0001,
-    "ni1": 50,
-    "ni2": 50,
-    "niterat": 99,
+    "ni1": 20,
+    "ni2": 20,
+    "niterat": 199,
     "nmaxm_1": 50,
     "nmaxm_2": 20,
     "nmaxm_3": 20,
@@ -55,7 +55,7 @@
     "upl_value": 0.0,
     "fp_solver": 0,
     "traj_len_seved": 50,
-    "max_number_of_traj": 30000,
+    "max_number_of_traj": 300000,
     "max_size_of_traj": 30000,
     "save_interval": 0.001
   },
@@ -64,7 +64,7 @@
     "Zminus": -20.0,
     "ZGapPlus": 0.0,
     "ZGapMinus": 0.0,
-    "ntet": 21,
+    "ntet": 3,
     "nnz": 100
   }
 }

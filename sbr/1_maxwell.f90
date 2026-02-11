@@ -3,7 +3,7 @@ module maxwell
       use kind_module      
       use constants, only : zero, pisqrt, pi2sqrt, pqe
       implicit none
-      integer, parameter :: i0 = 5010
+      integer, parameter :: i0 = 1002
 
 
       logical flag_d0
