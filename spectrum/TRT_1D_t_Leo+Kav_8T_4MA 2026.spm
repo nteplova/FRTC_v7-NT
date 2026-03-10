@@ -1,0 +1,11 @@
+{
+  "name": "TRT_1D_t_Leo+Kav_8T_4MA 2026",
+  "comment": " Irzak",
+  "spectrum": {
+    "kind": "spectrum_1D",
+    "source": "spcp(Ntau)_LeoKav_Bt8T_Ip4MA.dat",
+    "coordinate_system": 0,
+    "angle": 0.0,
+    "PWM": false
+  }
+}

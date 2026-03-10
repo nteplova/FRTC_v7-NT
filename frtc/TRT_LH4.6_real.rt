@@ -101,7 +101,7 @@
         "title": "nr",
         "value": 90,
         "type": "int",
-        "description": "radial grid number  <= 505"
+        "description": "radial grid number  <="
       },
       "hmin1": {
         "title": "hmin1",

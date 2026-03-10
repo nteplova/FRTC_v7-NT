@@ -1,5 +1,5 @@
 {
-  "name": "TTRT_4.6 1D",
+  "name": "TTRT_4.6 1D 2026",
   "comment": "TRT base",
   "physical_parameters": {
     "freq": 4.6,
@@ -20,7 +20,7 @@
     "kv": 30
   },
   "numerical_parameters": {
-    "nr": 30,
+    "nr": 90,
     "hmin1": 1e-6,
     "rrange": 0.0001,
     "eps": 1e-6,
@@ -32,8 +32,8 @@
     "pchm": 0.2,
     "pabs": 0.01,
     "pgiter": 0.0001,
-    "ni1": 20,
-    "ni2": 20,
+    "ni1": 50,
+    "ni2": 50,
     "niterat": 199,
     "nmaxm_1": 50,
     "nmaxm_2": 20,
@@ -54,17 +54,17 @@
     "upl_fix": true,
     "upl_value": 0.0,
     "fp_solver": 0,
-    "traj_len_seved": 50,
+    "traj_len_seved": -1,
     "max_number_of_traj": 300000,
     "max_size_of_traj": 30000,
-    "save_interval": 0.001
+    "save_interval": 0.0005
   },
   "grill_parameters": {
     "Zplus": 20.0,
     "Zminus": -20.0,
     "ZGapPlus": 0.0,
     "ZGapMinus": 0.0,
-    "ntet": 3,
+    "ntet": 31,
     "nnz": 100
   }
 }

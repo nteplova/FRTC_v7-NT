@@ -77,19 +77,11 @@ drivencurrent(CULH,ZRD35,ZRD36,CAR12,CAR13,CAR32)::CF2:CF3:;
 
 
 !========Current Density===========
-IPL=5.0;
-!CU:;
+IPL=4.0;
+
 CU:Eq;
-!CU=1.0;
 CU=CUX;
-!CU=TE**(3/2);
-!CU=1 - (RHO / ROC)**0.0001;
-!CU=(TEX)+ 1 - (RHO / ROC)**0.0001; !!**3/2;
 CAR25=TEX/6;
-!CU=CAR25; 
-!CU=(3.5-0.05)*((1-(AMETR/0.66)**1.5)**4)+0.05;
-!CU=FPR*1.5;
-!CC=CCHR;
 CC="work(j,303)"; !+CCMHD;
 CD=CULH;
 CUBS="work(j,301)";
@@ -123,8 +115,6 @@ NE=NEX;!!!!!!!!!
 CAR17=(2.5-0.8)*((1-(AMETR/0.223)**1.5)**8)+0.79;
 CAR19=(0.8-0.6)*((1-(AMETR/0.223)**15)**2)+0.6;
 CAR18=CAR17*STEP(0.161-AMETR)+CAR19*STEP(AMETR-0.161)+0.001;
-!NE=(1.1-0.3)*((1-(AMETR/ABC)**2)**1)+0.3;
-!NE=CAR19+0.001;
 
 CAR11 = (1.0*(1.0-ASTEP(CF6))+0.10*ASTEP(CF6));  ! 1
 CN=-1.0*SLAT*DN*AMETR/(ABC*ABC*G11);
@@ -134,7 +124,6 @@ CAR21=(0.72-0.17)*((1-(AMETR/0.223)**1.5)**7)+0.17;
 CAR22=(0.17-0.02)*((1-(AMETR/0.223)**15)**2)+0.02;
 CAR23=CAR21*STEP(0.171-AMETR)+CAR22*STEP(AMETR-0.171)+0.001;
 TE=TEX;!!!!!!!!
-!TE=(3.5-0.05)*((1-(AMETR/0.66)**1.5)**4)+0.05;
 
 
 HE=6.0*(1-FRAMP(0.120,0.135))+(0.9*4.7*(1.-FJUMP(0.165))+2*FJUMP(0.165));
@@ -146,8 +135,8 @@ PE=POH-PENEU-PENLI-PRAD+PELH;
 
 
 !====================   Radial output  =================================
-J\CU\-1;       Plh\PELH;   Johm\CUOHM\8;   E\UPL/(RTOR+AMETR)/GP2;
-Te\TE\\TEX;	   Jlh2\CULH\-2;   CC\CC\-3;      Q\1./MU;
+J\CU\-1;       Plh\PELH;   Johm\CUOHM\8;   E\UPL/RTOR/GP2;
+Te\TE\\TEX;	   Jbs\CUBS;   CC\CC\-3;      Q\1./MU;
 Jlh\CULH\-1;   Upl\UPL;    Zef\ZEF\-1;     Poh\POH\-2;
 Ti\TI\\TIX;      Ne\NE\\NEX;    sig\CAR32\-3;    Chr\CAR31; 
   

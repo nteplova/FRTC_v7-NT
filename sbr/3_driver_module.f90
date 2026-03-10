@@ -433,7 +433,7 @@ contains
             xnew=x+h
             if(xnew.eq.x) then
                 write(*,*) 'step size underflow in difeq'
-                pause
+               ! pause
             end if
             call mmid(ysav,dydx,nv,x,h,nseq(k),yseq,derivs)
             !sav#
