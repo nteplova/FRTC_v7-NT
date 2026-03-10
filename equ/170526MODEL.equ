@@ -1,0 +1,185 @@
+!STANDART EQUATION MODEL 
+ !----  Time  and radial output parameters  ----
+!DPOUT=1.d-4;  
+!DROUT=1.d-4;
+DTOUT=1.d-4;
+
+TSTART = 0.0260;
+TPAUSE = 0.0260 ;
+TEND = 0.034;
+TINIT=0.026;
+TSCALE=0.008
+!!!!!!!!!!!!!!!!!!!
+
+!!!!! Neoclassical coefficients!!
+!!!NEOCL2:;
+!!!HE="work(j,105)"; !!He NEOCLASS
+!!!XI="work(j,165)"; !!Xi NEOCLASS
+!!!CC="work(j,303)";  !CC Neoclass
+
+  !----  Equilibrium solver  ----
+NEQUIL=41;  !Grid number for equilibrium calculations
+            !If commented then no equilibrium recomputing
+
+  !----  Toroidal magnetic field  ----
+!!!!BTOR=2.0d0;
+
+  !----  Plasma  current  ----
+!!!!IPL=2.0d0;
+
+  !----  Plasma  density  ----
+NE:AS;
+
+NE=NEX;
+                     
+GNEX:;
+
+CN=0
+
+   !----  Electron  temperature═ ----
+TE:AS;
+TE=TEX;
+!PE=PJOUL-PEICL-PRADX+PELH;
+PE=PJOUL-PEICL-PRADX-PENEU;
+!PE=PJOUL-PEICL
+   !----  Ion  temperature  ----
+TI:AS;
+TI=TIX;               !Initial values of TI, KeV
+PI=PEICL;
+
+!DELTB(.005,.0805,.0188,0.075):;
+!sbr - kotoraja vse delaet 	
+		!DELTB(-.005,Ur0,Ip0,0.075):;
+
+
+CF9=1.0 
+CF10=0.001
+
+NNCL = cf9*0.009 
+NNWM = cf9*0.0005
+
+ENCL = CF10*0.8 
+ENWM = CF10*10
+
+NEUTEN:; 
+SNN=SNNEU
+
+
+		
+CV9=AB-ABS(CV2);
+!radius shnura
+
+!CV3=FLXADR(0.13);
+CV3=0.4*GP*IPL*RTOR*LOG(CV9/(0.13-CV2));
+
+CV7=TIMDER(CV3);
+!proizvodnaja ot Cv3
+
+!real loop voltage
+CV8=UPLB-CV7;
+
+ !po idee CV9 = <EED*NE>/<NE>
+!CAR1=NE*EED
+!CV9=VINT(CAR1B)/VINT(NEB)  
+
+
+NEOCL4:;
+!!========Current Density===========
+CU:EQ;
+CU=FPR;
+CC="WORK(j,303)"; 
+!CC=CNHR
+
+
+!HC=HCHR;
+!XC=XCHR;
+!DC=DCHR;
+
+!CU=CC;
+! 
+
+!CD=CULH;   !Externally driven current density profile, MA/m^2
+!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+   !----   Zeff  ----
+ZEF=ZEFX;
+!!!!!!ZEF=ZZEF;
+!!!!!!!!!!!!!!!!!!!!!!!!
+
+AMAIN=AMJ; ZMAIN=ZMJ; 
+!!!!!!!!!Primesy
+!mass of impurity !Charge of ions
+!AIM1=12; ZIM1=6;  !Carbon
+AIM1=16; ZIM1=8;  !Oxigen
+
+
+!densities of impurities
+
+NIZ1=NE*(ZEF-ZMJ)/(ZIM1-ZMJ)/ZIM1;
+
+NI=NE*(ZIM1-ZEF)/(ZIM1-ZMJ)/ZMJ;
+
+!Contribution to ZEFF
+!ZEF1=
+
+
+CAR13=TAUE
+CAR14=1
+CF6=VINT(CAR13,AB/2)/VINT(CAR14,AB/2)
+CF7=VINT(CAR13,AB*0.95)/VINT(CAR14,AB*0.95)
+
+car12=poh 
+car15=peicl 
+car17=ne*te 
+car18=-1*grad(te) 
+car19=-1*grad(ti) 
+car23=-1*grad(ne) 
+car24=-1*grad(car17)
+
+!Potok e tepla 
+CAR20=(QETOT-QEDWT)
+
+!Potok i tepla 
+CAR21=(QITOT-QIDWT)
+
+
+!====================   Radial output  ==================================
+
+!===============OUTPUT 1===================
+!Ne\Ne\3; Te\TE\0.6; SN\SNNEU*ne\; Rho\RHO\; 
+!PRAD\PRADX\-16; Ti\TI\0.15; HEGN\HEGN\5; nN\NN*(NNCL+NNWM)*1000\10;
+!dnexp\dnexp\; TN\TN\0.15; heeff\heeff\5; shif\SHIF\0.01;
+!q\1./MU; VOLUM\VOLUM\; POH\POH\; SHEA\SHEAR\;
+
+
+!==============OUTPUT2================
+!XIEFF\XIEFF\;  PEICL\PEICL\;  Ni\Ni\8.; SLAT\SLAT\; 
+!NIZ1\NIZ1\; Qe\CAR20*1000\6;  upl\upl\; grTe\car18\;  
+!VPrad\vint(pradx)\; HABOM\HABOM\; TAUEE\TAUEE\; grTi\car19\; 
+!VPoh\vint(car12)\; Qi\CAR21*1000\6; cc\cc\; grne\car23\;
+
+
+!==============OUTPUT3=================
+VPeicl\vint(car15)\;  ZEF\ZEF\; J\CU\; grPe\car24\;
+PETOT\PETOT\;
+
+
+!====================  Time output  ====================================
+
+TNB_TN(AB)*1000_3 
+!LOL_QETOT(AB)/QEDWT(AB)_150; 
+nnn_nn(AB)/nn(0)_0.2;
+
+Vexp_UEXT_6; ZEF_ZEF(AB)_6.; V_UPLB_6; IPL_IPL_0.035;
+
+neavb_neavb_6;
+
+TAUEEB_TAUEEB*1000_3;
+
+AMJ_AMJ_2.5;
+
+tNA_tauna*1000_2; tGO_taugo*1000_2; q.95_(1/MU(AB*0.95));
+
+ne0_nex(0)_8;
+
+

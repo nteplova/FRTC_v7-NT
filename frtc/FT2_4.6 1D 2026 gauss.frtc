@@ -1,0 +1,70 @@
+{
+  "name": "FT2_4.6 1D 2026 gauss",
+  "comment": "FT2 gauss",
+  "physical_parameters": {
+    "freq": 4.6,
+    "xmi1": 2.0,
+    "zi1": 1.0,
+    "xmi2": 16.0,
+    "zi2": 8.0,
+    "dni2": 0.25,
+    "xmi3": 1.0,
+    "zi3": 1.0,
+    "dni3": 0.0
+  },
+  "alphas_parameters": {
+    "itend0": 0,
+    "energy": 30.0,
+    "factor": 10.0,
+    "dra": 0.3,
+    "kv": 30
+  },
+  "numerical_parameters": {
+    "nr": 50,
+    "hmin1": 1e-6,
+    "rrange": 0.0001,
+    "eps": 1e-6,
+    "hdrob": 1.5,
+    "cleft": 0.7,
+    "cright": 1.5,
+    "cdel": 0.25,
+    "rbord": 0.999,
+    "pchm": 0.2,
+    "pabs": 0.01,
+    "pgiter": 0.0001,
+    "ni1": 50,
+    "ni2": 50,
+    "niterat": 199,
+    "nmaxm_1": 50,
+    "nmaxm_2": 20,
+    "nmaxm_3": 20,
+    "nmaxm_4": 20,
+    "maxstep2": 5000,
+    "maxstep4": 5000
+  },
+  "options": {
+    "ipri": 2,
+    "iw": 1,
+    "ismth": 1,
+    "ismthalf": 0,
+    "ismthout": 0,
+    "inew": -1,
+    "itor": 1,
+    "ipol": 1,
+    "upl_fix": true,
+    "upl_value": 0.0,
+    "fp_solver": 0,
+    "traj_len_seved": -1,
+    "max_number_of_traj": 300000,
+    "max_size_of_traj": 30000,
+    "save_interval": 0.0005
+  },
+  "grill_parameters": {
+    "Zplus": 2.4,
+    "Zminus": -2.4,
+    "ZGapPlus": 0.0,
+    "ZGapMinus": 0.0,
+    "ntet": 31,
+    "nnz": 100
+  }
+}
