@@ -217,7 +217,10 @@ subroutine write_trajectories(tview, ispectr,nnz,ntet) !sav2008
     print *, 'traj file:', fname, delta_time
     if (delta_time<save_interval) then 
         print *,  "skip saving"
-        return
+        if (abs(delta_time - save_interval)>1e-9) then
+            print *,  "skip saving 2"
+           return
+        endif
     endif
     if (ispectr>0) then
         last_time_saving_pos = tview
