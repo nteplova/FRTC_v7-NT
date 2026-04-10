@@ -16,9 +16,9 @@ subroutine binary_write_array(v, a, time, array_name)
     character(120) fname
     integer, parameter :: iu = 21
 
-    if (MOD(INT(time*100000), 10) /= 0) then 
-        return
-    end if
+    !if (MOD(INT(time*100000), 10) /= 0) then 
+    !    return
+    !end if
     
     nshape=shape(a) 
     print *, 'write arr:', array_name, nshape
@@ -47,9 +47,9 @@ subroutine write_v_array(v, a, time, array_name)
     character(120) fname
     integer, parameter :: iu = 21
 
-    if (MOD(INT(time*100000), 10) /= 0) then 
-        return
-    end if
+    !if (MOD(INT(time*100000), 10) /= 0) then 
+    !    return
+    !end if
     
     nshape=shape(a) 
     print *, 'write arr:', array_name, nshape
