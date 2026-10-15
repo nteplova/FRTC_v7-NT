@@ -18,7 +18,7 @@ module FP2D_solver_mod
     integer, parameter :: ny = 64
 
     ! --- Границы импульса (в единицах v_te) ---
-    real(wp), parameter :: p_max   = 20.0_wp
+    real(wp), parameter :: p_max   = 100.0_wp
     real(wp), parameter :: dp_par  = 2.0_wp*p_max/dble(nx-1)
     real(wp), parameter :: dp_perp = p_max/dble(ny-1)
 
@@ -57,7 +57,7 @@ end subroutine set_solver_params
 !=======================================================================
 ! Начальное распределение
 !   рель:   f ∝ exp(-(γ-1)/θ),  γ = √(1 + (p·v_te/c)²)
-!   нерель: f ∝ exp(-p²/(2θ))
+!   нерель: f ∝ exp(-p²/2)      (T_e = 1 в единицах v_te)
 !=======================================================================
 subroutine init_maxwell_juttner(f, theta, vc)
     real(wp), intent(out) :: f(nx, ny)
@@ -75,7 +75,8 @@ subroutine init_maxwell_juttner(f, theta, vc)
                 gamma = sqrt(1.0_wp + (p*vc)**2)
                 f(i,j) = exp(-(gamma - 1.0_wp)/theta)
             else
-                f(i,j) = exp(-0.5_wp * p**2 / theta)
+                ! Классический Максвелл: T_e = 1 в единицах v_te
+                f(i,j) = exp(-0.5_wp * p**2)
             end if
         end do
     end do
@@ -193,18 +194,27 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
         end do
     end do
 
-    ! --- Граничные условия ---
+    ! ================================================================
+    ! Граничные условия
+    ! ================================================================
+
+    ! p_par = ±p_max:  f = 0
     do j = 1, ny
         A(1,j,:)  = 0.0_wp; A(1,j,5)  = 1.0_wp; RHS(1,j)  = 0.0_wp
         A(nx,j,:) = 0.0_wp; A(nx,j,5) = 1.0_wp; RHS(nx,j) = 0.0_wp
     end do
+
+    ! p_perp = p_perp_max:  f = 0
     do i = 1, nx
         A(i,ny,:) = 0.0_wp; A(i,ny,5) = 1.0_wp; RHS(i,ny) = 0.0_wp
     end do
+
+    ! p_perp = 0:  симметрия, f(i,1) = f(i,2)
+    ! Уравнение:  -f(i,1) + f(i,2) = 0
     do i = 1, nx
         A(i,1,:) = 0.0_wp
-        A(i,1,2) = -1.0_wp
-        A(i,1,5) =  1.0_wp
+        A(i,1,5) = -1.0_wp     ! коэффициент при f(i,1)
+        A(i,1,8) =  1.0_wp     ! коэффициент при f(i,2)
         RHS(i,1) =  0.0_wp
     end do
 end subroutine build_operator
