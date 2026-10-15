@@ -30,7 +30,7 @@ contains
         real(wp) tetin0
 
         pabs = spectr%max_power*pabs0/1.d2
-        print *, 'pabs =', pabs, spectr%max_power, pabs0
+        !print *, 'pabs =', pabs, spectr%max_power, pabs0
         htet = zero
         hr = 1.d0/dble(nr+1) !sav2008
         if (ntet.ne.1) htet = (tet2-tet1)/(ntet-1)
@@ -110,7 +110,7 @@ contains
 20              continue
 
                 if(current_trajectory%nrefj.gt.maxref.and.pow.gt.pabs) then !forced absorp
-                    if (current_trajectory%nrefj.gt.maxref) then 
+                    if (current_trajectory%nrefj.gt.maxref+1000) then 
                         print *, 'exceeded limit of reflection number'
                         print *, 'max_refl= ', maxref
                         print *, 'nrefj=', current_trajectory%nrefj

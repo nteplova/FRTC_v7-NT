@@ -68,6 +68,7 @@ contains
         use spline_module
         use chebyshev
         use math_module
+        use xpoint
         implicit none
         integer, intent(in)  :: NA1
         real(wp), intent(in) :: ABC, BTOR, RTOR, UPDWN, GP2
@@ -163,6 +164,20 @@ contains
          cmy(i)=znak_pol*cmy(i)
         end do
 
+        open(77,file='lhcd/xpout.dat')
+            write(77,*) rm
+            write(77,*) r0
+            write(77,*) z0
+            do i=1,ipsy
+                write(77,*) cdl(i)
+            end do
+            do i=1,ipsy
+                write(77,*) cly(i)
+            end do
+            do i=1,ipsy
+                write(77,*) cgm(i)
+            end do
+        close(77)
         
     !!!!!!!!!!!!!!! spline approximation of plasma profiles !!!!!!!!!!!!!!!!
         call splne(rh,con,nspl,y2dn)
@@ -179,6 +194,7 @@ contains
         
         call init_parameters
         call find_volums_and_surfaces
+        call readxpnt
 
     end subroutine
 
@@ -204,8 +220,8 @@ contains
         real(wp) :: hr, sss
     !!!   
         xly = fdf(one,cly,ncoef,xlyp)
-        tet1 = calc_theta(zplus, xly)
-        tet2 = calc_theta(zminus, xly)
+        tet1 = calc_theta(zplus, xly)!+pi/2
+        tet2 = calc_theta(zminus, xly)!+pi/2
         gap_tet_plus = calc_theta(ZGapPlus, xly)
         gap_tet_minus = calc_theta(ZGapMinus, xly)
         
@@ -749,6 +765,7 @@ contains
     function obeom(ptet,pa) result(res)
         use constants
         use approximation
+        use xpoint
         implicit real*8 (a-h,o-z)
         real(wp), intent(in)    :: ptet
         real(wp), intent(in)    :: pa
@@ -773,6 +790,11 @@ contains
         dxdtdt=-pa*cotet-two*xgm*(cotet**2-sitet**2)
         dzdtdt=-xly*pa*sitet
         x0t=dxdt
+
+
+        if(-5.gt.0) then !!!!!!!!!!!xtochk
+            call xpnt(pa,ptet-1.5d0*pi,dxdr,dxdt,dzdr,dzdt,x0,dxdrdt,dxdtdt,dzdrdt,dzdtdt,x0t)
+        end if
 !--------------------------------------
 ! components of metric tensor
 !--------------------------------------
@@ -788,6 +810,7 @@ contains
     function ploshad(ptet,pa) result(res)
         use constants
         use approximation
+        use xpoint
         implicit real*8 (a-h,o-z)
         real(wp), intent(in)    :: ptet
         real(wp), intent(in)    :: pa
@@ -812,6 +835,11 @@ contains
         dxdtdt=-pa*cotet-two*xgm*(cotet**2-sitet**2)
         dzdtdt=-xly*pa*sitet
         x0t=dxdt
+
+        if(-5.gt.0) then !!!!!!!!!!!xtochk
+            call xpnt(pa,ptet-1.5d0*pi,dxdr,dxdt,dzdr,dzdt,x0,dxdrdt,dxdtdt,dzdrdt,dzdtdt,x0t)
+        end if
+
         !--------------------------------------
         ! components of metric tensor
         !--------------------------------------

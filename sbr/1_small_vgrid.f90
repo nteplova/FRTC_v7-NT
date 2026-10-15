@@ -29,7 +29,8 @@ module small_vgrid
     real(wp) :: vlf,vrt,dflf,dfrt
     !common /a0ghp/ vlf,vrt,dflf,dfrt
         
-    integer, parameter :: kpt1=20, kpt3=20
+    !integer, parameter :: kpt1=20, kpt3=20
+    integer, parameter :: kpt1=100, kpt3=100
 
 contains
 

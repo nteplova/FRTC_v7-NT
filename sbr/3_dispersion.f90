@@ -19,6 +19,7 @@ contains
         use approximation
         use plasma
         use rt_parameters
+        use xpoint
         implicit none
         real(wp), intent(in) :: pa
         real(wp), intent(in) :: ptet
@@ -44,6 +45,9 @@ contains
         dxdtdt=-pa*cotet-two*xgm*(cotet**2-sitet**2)
         dzdtdt=-xly*pa*sitet
         x0t=dxdt
+        if(-5.gt.0) then !!!!!!!!!!!xtochk
+            call xpnt(pa,ptet-1.5d0*pi,dxdr,dxdt,dzdr,dzdt,x0,dxdrdt,dxdtdt,dzdrdt,dzdtdt,x0t)
+        end if
         !--------------------------------------
         ! components of metric tensor
         !--------------------------------------
@@ -993,6 +997,7 @@ contains
         use dispersion_equation, only: ynz
         use decrements, only : dhdnr !!!!!
         use source_new_mod, only: source_new
+        use xpoint
         implicit none
         real(wp), intent(in)    :: in_pa   ! ro
         real(wp), intent(in)    :: yn2     ! ???
@@ -1101,6 +1106,9 @@ contains
         dzdrdt=dzdtdr
         x0t=dxdt
         x0r=dxdr
+        if(-5.gt.0) then !!!!!!!!!!!xtochk
+            call xpnt2(pa,ptet-1.5d0*pi,dxdr,dxdt,dzdr,dzdt,x0,dxdrdt,dxdtdt,dzdrdt,dzdtdt,x0t,dxdrdr,dxdtdr,dzdrdr,dzdtdr,x0r)
+        end if
         g11=dxdr**2+dzdr**2
         g22=dxdt**2+dzdt**2
         g12=dxdr*dxdt+dzdr*dzdt

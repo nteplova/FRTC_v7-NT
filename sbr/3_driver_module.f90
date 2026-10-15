@@ -746,7 +746,7 @@ contains
                 izn=-izn
                 call disp2_ivar3(y(3),y(2),y(1),xnr)
                 if(ivar.eq.-1) then !out of dispersion curve - restart
-                    print *, 'out of dispersion curve - restart'
+                    !print *, 'out of dispersion curve - restart'
                     do i=1,nvar
                         y(i)=ystart(i)
                     end do
