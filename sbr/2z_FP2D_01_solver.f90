@@ -2,41 +2,38 @@
 ! Модуль FP2D_solver_mod
 ! 2D решатель уравнения Фоккера-Планка для кода FRTC.
 !
-! Поддерживает два режима:
-!   use_relativistic = .FALSE.  — классический Ландау + Максвелл
-!   use_relativistic = .TRUE.   — Беляев-Будкер + Максвелл-Юттнер
-!
 ! Схема: Ченг-Купер + 9-точечная неявная схема с AF-факторизацией.
 ! Координаты: (p_par, p_perp) в единицах v_te(r).
+!
+! Граничное условие при p_perp = 0:
+!   (1/p) ∂/∂p (p D ∂f/∂p) → 4 D ∂²f/∂p²
 !=======================================================================
 module FP2D_solver_mod
     use kind_module, only: wp
     implicit none
 
-    ! --- Размер сетки ---
     integer, parameter :: nx = 64
     integer, parameter :: ny = 64
 
-    ! --- Границы импульса (в единицах v_te) ---
     real(wp), parameter :: p_max   = 100.0_wp
     real(wp), parameter :: dp_par  = 2.0_wp*p_max/dble(nx-1)
     real(wp), parameter :: dp_perp = p_max/dble(ny-1)
 
-    ! --- Численные параметры ---
-    integer,  parameter :: max_iter = 50
-    real(wp), parameter :: tol_conv = 1.0e-8_wp
+    integer,  parameter :: max_iter = 100
+    real(wp), parameter :: tol_conv = 1.0e-6_wp
     real(wp), parameter :: eps_reg  = 1.0e-12_wp
     real(wp), parameter :: pi       = 3.14159265358979323846_wp
 
-    ! --- Физические параметры (устанавливаются извне) ---
     real(wp), save :: theta_e    = 1.0e-3_wp
     real(wp), save :: z_eff      = 1.0_wp
     real(wp), save :: e_field    = 0.0_wp
     real(wp), save :: vte_over_c = 0.05_wp
     real(wp), save :: gamma_coll = 1.0_wp
 
-    ! --- Флаг релятивизма ---
     logical, save :: use_relativistic = .TRUE.
+
+    ! --- Флаг диагностики ---
+    logical, save :: debug_init = .TRUE.
 
 contains
 
@@ -55,15 +52,22 @@ subroutine set_solver_params(theta, z, ef, vc, gc, rel)
 end subroutine set_solver_params
 
 !=======================================================================
-! Начальное распределение
-!   рель:   f ∝ exp(-(γ-1)/θ),  γ = √(1 + (p·v_te/c)²)
-!   нерель: f ∝ exp(-p²/2)      (T_e = 1 в единицах v_te)
+! Начальное распределение с диагностикой
 !=======================================================================
 subroutine init_maxwell_juttner(f, theta, vc)
     real(wp), intent(out) :: f(nx, ny)
     real(wp), intent(in)  :: theta, vc
     real(wp) :: p_par, p_perp, p, gamma
     integer  :: i, j
+
+    ! --- Жёсткая диагностика ---
+    print *, '>>> init_maxwell_juttner CALLED <<<'
+    print *, '    use_relativistic = ', use_relativistic
+    print *, '    theta            = ', theta
+    print *, '    vc               = ', vc
+    print *, '    p_max            = ', p_max
+    print *, '    dp_par           = ', dp_par
+    ! ------------------------------------
 
     do j = 1, ny
         p_perp = dble(j-1) * dp_perp
@@ -75,15 +79,23 @@ subroutine init_maxwell_juttner(f, theta, vc)
                 gamma = sqrt(1.0_wp + (p*vc)**2)
                 f(i,j) = exp(-(gamma - 1.0_wp)/theta)
             else
-                ! Классический Максвелл: T_e = 1 в единицах v_te
                 f(i,j) = exp(-0.5_wp * p**2)
+            end if
+
+            ! --- Печать в точке (i=33, j=1) ---
+            if (i == 33 .and. j == 1) then
+                print *, '>>> (i=33,j=1) p = ', p
+                print *, '    use_rel = ', use_relativistic
+                print *, '    exp(-0.5 p^2)         = ', exp(-0.5_wp * p**2)
+                print *, '    exp(-0.5 p^2/theta)   = ', exp(-0.5_wp * p**2 / theta)
+                print *, '    f(i,j)                = ', f(i,j)
             end if
         end do
     end do
 end subroutine init_maxwell_juttner
 
 !=======================================================================
-! Решатель: nt шагов по времени dt
+! Решатель
 !=======================================================================
 subroutine solve_fokker_planck_2d(f, D_QL, dt, nt)
     real(wp), intent(inout) :: f(nx, ny)
@@ -119,11 +131,13 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
     real(wp) :: D_pp, D_tt, F_v, D_par, D_perp, F_par, F_perp
     real(wp) :: delta_p, delta_t, w_p, w_t
     real(wp) :: ap, bp, am, bm, pp, pm
+    real(wp) :: D_perp_eff
     integer  :: i, j
 
     A   = 0.0_wp
     RHS = 0.0_wp
 
+    ! --- Внутренние точки: j = 2..ny-1, i = 2..nx-1 ---
     do j = 2, ny-1
         p_perp = dble(j-1)*dp_perp
         do i = 2, nx-1
@@ -151,7 +165,8 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
 
             ! --- Поток по p_perp ---
             pp = p_perp + 0.5_wp*dp_perp
-            pm = max(p_perp - 0.5_wp*dp_perp, eps_reg)
+            pm = p_perp - 0.5_wp*dp_perp
+            if (pm < eps_reg) pm = eps_reg
 
             ap = -D_perp/dp_perp + F_perp*delta_p
             bp =  D_perp/dp_perp + F_perp*(1.0_wp-delta_p)
@@ -180,7 +195,7 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
                 A(i,j,5) = A(i,j,5) + 2.0_wp*dt*D_QL(i,j)/dp_par**2
             end if
 
-            ! --- Электрическое поле (upwind) ---
+            ! --- Электрическое поле ---
             if (e_field > 0.0_wp) then
                 A(i,j,4) = A(i,j,4) - dt*e_field/dp_par
                 A(i,j,5) = A(i,j,5) + dt*e_field/dp_par
@@ -194,43 +209,73 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
         end do
     end do
 
-    ! ================================================================
-    ! Граничные условия
-    ! ================================================================
+    ! --- Особая точка j = 1: p_perp = 0 ---
+    do i = 2, nx-1
+        p_par  = -p_max + dble(i-1)*dp_par
+        p = abs(p_par)
+        if (p < eps_reg) p = eps_reg
 
-    ! p_par = ±p_max:  f = 0
+        if (use_relativistic) then
+            gamma = sqrt(1.0_wp + (p*vte_over_c)**2)
+            v     = p / gamma
+        else
+            gamma = 1.0_wp
+            v     = p
+        end if
+
+        call collision_coeffs(p, v, gamma, D_pp, D_tt, F_v)
+
+        D_par = D_pp
+        F_par = 0.0_wp
+        if (p_par >  eps_reg) F_par =  F_v
+        if (p_par < -eps_reg) F_par = -F_v
+
+        call cc_weight(F_par*dp_par, D_par, delta_t, w_t)
+
+        ap = -D_par/dp_par + F_par*delta_t
+        bp =  D_par/dp_par + F_par*(1.0_wp-delta_t)
+        am = -D_par/dp_par + F_par*delta_t
+        bm =  D_par/dp_par + F_par*(1.0_wp-delta_t)
+
+        A(i,1,4) = A(i,1,4) + dt/dp_par * bm
+        A(i,1,6) = A(i,1,6) - dt/dp_par * ap
+        A(i,1,5) = A(i,1,5) - dt/dp_par*bp + dt/dp_par*am
+
+        D_perp_eff = 4.0_wp * D_tt / dp_perp**2
+        A(i,1,5) = A(i,1,5) + dt * D_perp_eff
+        A(i,1,8) = A(i,1,8) - dt * D_perp_eff
+
+        if (D_QL(i,1) > 0.0_wp) then
+            A(i,1,4) = A(i,1,4) - dt*D_QL(i,1)/dp_par**2
+            A(i,1,6) = A(i,1,6) - dt*D_QL(i,1)/dp_par**2
+            A(i,1,5) = A(i,1,5) + 2.0_wp*dt*D_QL(i,1)/dp_par**2
+        end if
+
+        if (e_field > 0.0_wp) then
+            A(i,1,4) = A(i,1,4) - dt*e_field/dp_par
+            A(i,1,5) = A(i,1,5) + dt*e_field/dp_par
+        else if (e_field < 0.0_wp) then
+            A(i,1,6) = A(i,1,6) + dt*e_field/dp_par
+            A(i,1,5) = A(i,1,5) - dt*e_field/dp_par
+        end if
+
+        A(i,1,5) = A(i,1,5) + 1.0_wp/dt
+        RHS(i,1) = f(i,1)/dt
+    end do
+
+    ! --- Граничные условия (Dirichlet) ---
     do j = 1, ny
         A(1,j,:)  = 0.0_wp; A(1,j,5)  = 1.0_wp; RHS(1,j)  = 0.0_wp
         A(nx,j,:) = 0.0_wp; A(nx,j,5) = 1.0_wp; RHS(nx,j) = 0.0_wp
     end do
-
-    ! p_perp = p_perp_max:  f = 0
     do i = 1, nx
         A(i,ny,:) = 0.0_wp; A(i,ny,5) = 1.0_wp; RHS(i,ny) = 0.0_wp
     end do
 
-    ! p_perp = 0:  симметрия, f(i,1) = f(i,2)
-    ! Уравнение:  -f(i,1) + f(i,2) = 0
-    do i = 1, nx
-        A(i,1,:) = 0.0_wp
-        A(i,1,5) = -1.0_wp     ! коэффициент при f(i,1)
-        A(i,1,8) =  1.0_wp     ! коэффициент при f(i,2)
-        RHS(i,1) =  0.0_wp
-    end do
 end subroutine build_operator
 
 !=======================================================================
 ! Коэффициенты столкновений
-!
-! Нерелятивистский Ландау (v = p):
-!   D_pp = Γ·v_th²/v³
-!   D_θθ = Γ·(Z+1)/(2v)
-!   F_v  = −Γ·v_th²/(T_e·v²)
-!
-! Релятивистский Беляев-Будкер (v = p/γ):
-!   D_pp = Γ·v_th²/(v³·γ)
-!   D_θθ = Γ·(Z+1)/(2v·γ)
-!   F_v  = −Γ·v_th²/(T_e·v²·γ)
 !=======================================================================
 subroutine collision_coeffs(p, v, gamma, D_pp, D_tt, F_v)
     real(wp), intent(in)  :: p, v, gamma
@@ -330,7 +375,7 @@ subroutine tridiag(n, a, b, c, d, x)
 end subroutine tridiag
 
 !=======================================================================
-! Доступ к сетке (для bridge)
+! Доступ к сетке
 !=======================================================================
 subroutine get_2d_grid(p_par_out, p_perp_out)
     real(wp), intent(out) :: p_par_out(nx), p_perp_out(ny)
