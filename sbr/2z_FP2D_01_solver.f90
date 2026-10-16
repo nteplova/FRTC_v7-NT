@@ -305,21 +305,20 @@ end subroutine build_operator
 subroutine collision_coeffs(p, v, gamma, D_pp, D_tt, F_v)
     real(wp), intent(in)  :: p, v, gamma
     real(wp), intent(out) :: D_pp, D_tt, F_v
-    real(wp) :: vth2, G, vs, gg
+    real(wp) :: G, vs, gg
 
-    vth2 = theta_e
-    G    = gamma_coll
-    vs   = max(v, eps_reg)
+    G  = gamma_coll
+    vs = max(v, eps_reg)
 
     if (use_relativistic) then
         gg = max(gamma, 1.0_wp)
-        D_pp = G * vth2 / (vs**3 * gg)
+        D_pp = G / (vs**3 * gg)
         D_tt = G * (z_eff + 1.0_wp) / (2.0_wp * vs * gg)
-        F_v  = -G * vth2 / (theta_e * vs**2 * gg)
+        F_v  = -G / (vs**2 * gg)
     else
-        D_pp = G * vth2 / vs**3
+        D_pp = G / vs**3
         D_tt = G * (z_eff + 1.0_wp) / (2.0_wp * vs)
-        F_v  = -G * vth2 / (theta_e * vs**2)
+        F_v  = -G / vs**2
     end if
 end subroutine collision_coeffs
 

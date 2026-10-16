@@ -16,7 +16,7 @@ module FP2D_bridge_mod
     use FP2D_solver_mod
     use nr_grid,         only: MAX_NR, vij, fij, fij0, dfij, dij
     use maxwell,         only: i0
-    use plasma,          only: fvt, ft, zefff, enorm
+    use plasma,          only: fvt, ft, zefff, enorm, fst
     use rt_parameters,   only: nr
     implicit none
 
@@ -126,6 +126,7 @@ subroutine fp2d_driver(dt, nt, use_rel)
     logical,  intent(in) :: use_rel
     integer  :: jr, k
     real(wp) :: f2d_max_before, f2d_max_after, DQL_max
+    real(wp) :: dtau
     integer  :: jr_mid
 
     if (.not. fp2d_initialized) then
@@ -137,11 +138,13 @@ subroutine fp2d_driver(dt, nt, use_rel)
     f2d_max_before = maxval(f2D)
 
     do jr = 1, nr
-        call set_physical_params(jr, use_rel)
-        do k = 1, 2
-            call interp_dql_2d(jr, k, use_rel)
-            call solve_fokker_planck_2d(f2D(:,:,jr,k), D_QL2D(:,:,jr,k), dt, nt)
-        end do
+    call set_physical_params(jr, use_rel)
+    dtau = dt * fst(jr)                 ! ← масштабируем время как в 1D
+    do k = 1, 2
+        call interp_dql_2d(jr, k, use_rel)
+        call solve_fokker_planck_2d(f2D(:,:,jr,k), D_QL2D(:,:,jr,k), &
+                                     dtau, nt)
+    end do
     end do
 
     f2d_max_after = maxval(f2D)

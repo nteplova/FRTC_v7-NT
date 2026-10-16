@@ -53,7 +53,7 @@
     "ipol": 1,
     "upl_fix": true,
     "upl_value": 0.0,
-    "fp_solver": 0,
+    "fp_solver": 2,
     "traj_len_seved": -1,
     "max_number_of_traj": 30000,
     "max_size_of_traj": 50000,
