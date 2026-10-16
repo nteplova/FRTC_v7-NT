@@ -131,13 +131,16 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
     real(wp) :: D_pp, D_tt, F_v, D_par, D_perp, F_par, F_perp
     real(wp) :: delta_p, delta_t, w_p, w_t
     real(wp) :: ap, bp, am, bm, pp, pm
+    real(wp) :: Sa_p, Sb_p
     real(wp) :: D_perp_eff
     integer  :: i, j
 
     A   = 0.0_wp
     RHS = 0.0_wp
 
-    ! --- Внутренние точки: j = 2..ny-1, i = 2..nx-1 ---
+    ! ================================================================
+    ! ОСНОВНОЙ ЦИКЛ: j = 2..ny-1, i = 2..nx-1
+    ! ================================================================
     do j = 2, ny-1
         p_perp = dble(j-1)*dp_perp
         do i = 2, nx-1
@@ -163,39 +166,49 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
             call cc_weight(F_perp*dp_perp, D_perp, delta_p, w_p)
             call cc_weight(F_par *dp_par,  D_par,  delta_t, w_t)
 
-            ! --- Поток по p_perp ---
+            ! ----------------------------------------------------------
+            ! Потоки в p_perp
+            !   S_{j+1/2} = ap·f_j + bp·f_{j+1}
+            !   S_{j-1/2} = am·f_j + bm·f_{j-1}
+            ! ----------------------------------------------------------
             pp = p_perp + 0.5_wp*dp_perp
-            pm = p_perp - 0.5_wp*dp_perp
-            if (pm < eps_reg) pm = eps_reg
+            pm = max(p_perp - 0.5_wp*dp_perp, eps_reg)
 
             ap = -D_perp/dp_perp + F_perp*delta_p
-            bp =  D_perp/dp_perp + F_perp*(1.0_wp-delta_p)
+            bp =  D_perp/dp_perp + F_perp*(1.0_wp - delta_p)
             am = -D_perp/dp_perp + F_perp*delta_p
-            bm =  D_perp/dp_perp + F_perp*(1.0_wp-delta_p)
+            bm =  D_perp/dp_perp + F_perp*(1.0_wp - delta_p)
 
-            A(i,j,2) = A(i,j,2) + dt/(p_perp*dp_perp) * pm * bm
-            A(i,j,8) = A(i,j,8) - dt/(p_perp*dp_perp) * pp * ap
-            A(i,j,5) = A(i,j,5) - dt/(p_perp*dp_perp)*pp*bp &
-                                 + dt/(p_perp*dp_perp)*pm*am
+            ! A = I - dt·L  (M-матрица: диагональ > 0, вне-диагонали < 0)
+            A(i,j,2) = A(i,j,2) - dt/(p_perp*dp_perp) * pm * bm
+            A(i,j,8) = A(i,j,8) + dt/(p_perp*dp_perp) * pp * ap
+            A(i,j,5) = A(i,j,5) + dt/(p_perp*dp_perp)*pp*bp &
+                                 - dt/(p_perp*dp_perp)*pm*am
 
-            ! --- Поток по p_par ---
+            ! ----------------------------------------------------------
+            ! Потоки в p_par
+            ! ----------------------------------------------------------
             ap = -D_par/dp_par + F_par*delta_t
-            bp =  D_par/dp_par + F_par*(1.0_wp-delta_t)
+            bp =  D_par/dp_par + F_par*(1.0_wp - delta_t)
             am = -D_par/dp_par + F_par*delta_t
-            bm =  D_par/dp_par + F_par*(1.0_wp-delta_t)
+            bm =  D_par/dp_par + F_par*(1.0_wp - delta_t)
 
-            A(i,j,4) = A(i,j,4) + dt/dp_par * bm
-            A(i,j,6) = A(i,j,6) - dt/dp_par * ap
-            A(i,j,5) = A(i,j,5) - dt/dp_par*bp + dt/dp_par*am
+            A(i,j,4) = A(i,j,4) - dt/dp_par * bm
+            A(i,j,6) = A(i,j,6) + dt/dp_par * ap
+            A(i,j,5) = A(i,j,5) + dt/dp_par*bp - dt/dp_par*am
 
-            ! --- Квазилинейная диффузия ---
+            ! ----------------------------------------------------------
+            ! Квазилинейная диффузия от НГ-волн
+            ! ----------------------------------------------------------
             if (D_QL(i,j) > 0.0_wp) then
                 A(i,j,4) = A(i,j,4) - dt*D_QL(i,j)/dp_par**2
                 A(i,j,6) = A(i,j,6) - dt*D_QL(i,j)/dp_par**2
                 A(i,j,5) = A(i,j,5) + 2.0_wp*dt*D_QL(i,j)/dp_par**2
             end if
 
-            ! --- Электрическое поле ---
+            ! ----------------------------------------------------------
+            ! Электрическое поле (upwind)
+            ! ----------------------------------------------------------
             if (e_field > 0.0_wp) then
                 A(i,j,4) = A(i,j,4) - dt*e_field/dp_par
                 A(i,j,5) = A(i,j,5) + dt*e_field/dp_par
@@ -204,12 +217,17 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
                 A(i,j,5) = A(i,j,5) - dt*e_field/dp_par
             end if
 
-            A(i,j,5) = A(i,j,5) + 1.0_wp/dt
-            RHS(i,j) = f(i,j)/dt
+            ! ----------------------------------------------------------
+            ! Временной член: (I - dt·L) f_new = f
+            ! ----------------------------------------------------------
+            A(i,j,5) = A(i,j,5) + 1.0_wp
+            RHS(i,j) = f(i,j)
         end do
     end do
 
-    ! --- Особая точка j = 1: p_perp = 0 ---
+    ! ================================================================
+    ! ОСОБЫЙ БЛОК: j = 1 (p_perp = 0)
+    ! ================================================================
     do i = 2, nx-1
         p_par  = -p_max + dble(i-1)*dp_par
         p = abs(p_par)
@@ -225,6 +243,7 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
 
         call collision_coeffs(p, v, gamma, D_pp, D_tt, F_v)
 
+        ! --- p_par направление: D_par = D_pp, F_par = sign(p_par)·F_v ---
         D_par = D_pp
         F_par = 0.0_wp
         if (p_par >  eps_reg) F_par =  F_v
@@ -233,24 +252,27 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
         call cc_weight(F_par*dp_par, D_par, delta_t, w_t)
 
         ap = -D_par/dp_par + F_par*delta_t
-        bp =  D_par/dp_par + F_par*(1.0_wp-delta_t)
+        bp =  D_par/dp_par + F_par*(1.0_wp - delta_t)
         am = -D_par/dp_par + F_par*delta_t
-        bm =  D_par/dp_par + F_par*(1.0_wp-delta_t)
+        bm =  D_par/dp_par + F_par*(1.0_wp - delta_t)
 
-        A(i,1,4) = A(i,1,4) + dt/dp_par * bm
-        A(i,1,6) = A(i,1,6) - dt/dp_par * ap
-        A(i,1,5) = A(i,1,5) - dt/dp_par*bp + dt/dp_par*am
+        A(i,1,4) = A(i,1,4) - dt/dp_par * bm
+        A(i,1,6) = A(i,1,6) + dt/dp_par * ap
+        A(i,1,5) = A(i,1,5) + dt/dp_par*bp - dt/dp_par*am
 
+        ! --- p_perp направление: фактор 4 для цилиндрической сингулярности ---
         D_perp_eff = 4.0_wp * D_tt / dp_perp**2
         A(i,1,5) = A(i,1,5) + dt * D_perp_eff
         A(i,1,8) = A(i,1,8) - dt * D_perp_eff
 
+        ! --- QL диффузия ---
         if (D_QL(i,1) > 0.0_wp) then
             A(i,1,4) = A(i,1,4) - dt*D_QL(i,1)/dp_par**2
             A(i,1,6) = A(i,1,6) - dt*D_QL(i,1)/dp_par**2
             A(i,1,5) = A(i,1,5) + 2.0_wp*dt*D_QL(i,1)/dp_par**2
         end if
 
+        ! --- Электрическое поле ---
         if (e_field > 0.0_wp) then
             A(i,1,4) = A(i,1,4) - dt*e_field/dp_par
             A(i,1,5) = A(i,1,5) + dt*e_field/dp_par
@@ -259,11 +281,14 @@ subroutine build_operator(f, D_QL, dt, A, RHS)
             A(i,1,5) = A(i,1,5) - dt*e_field/dp_par
         end if
 
-        A(i,1,5) = A(i,1,5) + 1.0_wp/dt
-        RHS(i,1) = f(i,1)/dt
+        ! --- Временной член ---
+        A(i,1,5) = A(i,1,5) + 1.0_wp
+        RHS(i,1) = f(i,1)
     end do
 
-    ! --- Граничные условия (Dirichlet) ---
+    ! ================================================================
+    ! ГРАНИЧНЫЕ УСЛОВИЯ (Dirichlet: f = 0)
+    ! ================================================================
     do j = 1, ny
         A(1,j,:)  = 0.0_wp; A(1,j,5)  = 1.0_wp; RHS(1,j)  = 0.0_wp
         A(nx,j,:) = 0.0_wp; A(nx,j,5) = 1.0_wp; RHS(nx,j) = 0.0_wp
