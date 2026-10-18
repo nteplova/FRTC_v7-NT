@@ -161,7 +161,7 @@ subroutine compute_stable_dt(D_QL, dt_in, dt, nt)
 end subroutine compute_stable_dt
 
 !=======================================================================
-! Коллизионные коэффициенты в точке
+! Столкновительные коэффициенты в точке
 !=======================================================================
 subroutine collision_at_point(p_par, p_perp, D_par, F_par, D_perp, F_perp)
     real(wp), intent(in)  :: p_par, p_perp
@@ -184,8 +184,8 @@ subroutine collision_at_point(p_par, p_perp, D_par, F_par, D_perp, F_perp)
     D_perp = (p_perp/p)**2 * D_pp + (p_par /p)**2 * D_tt
 
     ! Well-balanced формы
-    F_par  = -D_par  * p_par
-    F_perp = -D_perp * p_perp
+    F_par  = -D_pp  * p_par    ! как в формуле 1Д
+    F_perp = -D_pp * p_perp
 end subroutine collision_at_point
 
 !=======================================================================
@@ -439,5 +439,45 @@ subroutine get_2d_grid(p_par_out, p_perp_out)
         p_perp_out(j) = dble(j-1)*dp_perp
     end do
 end subroutine get_2d_grid
+
+!=======================================================================
+! Диагностика состояния 2D распределения: интеграл, max, min, позиция пика
+!=======================================================================
+subroutine fp2d_solver_stats(f, label)
+    real(wp), intent(in) :: f(nx, ny)
+    character(len=*), intent(in) :: label
+    real(wp) :: total, fmax, fmin
+    integer  :: i, j, i_max, j_max
+    logical  :: has_nan
+
+    total = 0.0_wp
+    fmax  = 0.0_wp
+    fmin  = 1.0e30_wp
+    i_max = 1; j_max = 1
+
+    do j = 1, ny
+        do i = 1, nx
+            if (f(i,j) > fmax) then
+                fmax = f(i,j); i_max = i; j_max = j
+            end if
+            if (f(i,j) < fmin) fmin = f(i,j)
+            total = total + f(i,j) * 2.0_wp*pi*dble(j-1)*dp_perp &
+                                * dp_par * dp_perp
+        end do
+    end do
+
+    has_nan = .FALSE.
+    if (fmax /= fmax) has_nan = .TRUE.
+    if (fmin /= fmin) has_nan = .TRUE.
+    if (total /= total) has_nan = .TRUE.
+
+    print '(A,A,A)',      '  [', trim(label), ']'
+    print '(A,ES15.5E3,A,2F10.3)', '    ∫f·2πp⊥dp = ', total, &
+          '   peak at (p_par,p_perp) = ', &
+          -p_max + dble(i_max-1)*dp_par, dble(j_max-1)*dp_perp
+    print '(A,ES15.5E3,A,ES15.5E3)', '    fmax = ', fmax, &
+          '   fmin = ', fmin
+    if (has_nan) print *, '    *** NaN/Inf detected! ***'
+end subroutine fp2d_solver_stats
 
 end module FP2D_solver_mod
