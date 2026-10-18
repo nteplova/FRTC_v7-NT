@@ -8,14 +8,13 @@
 !
 ! Отображение k ↔ знак p_par:
 !   В 1D-коде (см. 3_FokkerPlanck.f90, fokkerplanck_compute):
-!     k=1 → dij(:,:,1) (положительный спектр, ispectr=+1)
-!           znak = -1 (обратное электрическое поле в 1D-уравнении)
-!     k=2 → dij(:,:,2) (отрицательный спектр, ispectr=-1)
-!           znak = +1
+! Отображение k ↔ знак p_par:
+!   k=1 (ispectr=+1, положительный спектр) → D_QL прикладывается к p_par > 0
+!   k=2 (ispectr=-1, отрицательный спектр) → D_QL прикладывается к p_par < 0
 !   В 2D-коде мы работаем с полным распределением на p_par ∈ [-p_max,+p_max],
 !   поэтому:
-!     k=1 → D_QL прикладывается к p_par < 0
-!     k=2 → D_QL прикладывается к p_par > 0
+!     k=1 → D_QL прикладывается к p_par > 0
+!     k=2 → D_QL прикладывается к p_par < 0
 !
 ! ВАЖНО: fij0 в этом модуле — это маргинал НАЧАЛЬНОГО максвеллиана
 ! (без E-поля и без волн). Это отличается от 1D-кода, где fij0 — решение
@@ -53,7 +52,7 @@ module FP2D_bridge_mod
     ! Исторически в bridge стоял множитель 0.1. Оставлен как именованная
     ! константа, чтобы его можно было обнулить или откалибровать.
     ! Должен быть 1.0 для прямого соответствия 1D-коду!
-    real(wp), parameter :: D_QL_scale = 1.0_wp
+    real(wp), parameter :: D_QL_scale = 1.0_wp !!!1.0_wp
 
     ! ---- Диагностика ----
     logical, save :: fp2d_verbose = .TRUE.
@@ -123,7 +122,16 @@ subroutine fp2d_init(use_rel)
         call fp2d_solver_stats(f2D0(:,:,1,1), 'f2D0 jr=1 k=1')
         print *, '================='
     end if
+
+if (fp2d_verbose .and. fp2d_diag_level >= 4) then
+    print *, '=== running clean self-test (D_QL=0, E=0) ==='
+    call fp2d_conservation_test(nsteps=20, dt_step=0.01_wp, &
+                                use_rel=use_rel, tol_rel=1.0e-3_wp)
+    print *, '=== end of self-test ==='
+end if
+
 end subroutine fp2d_init
+
 
 !=======================================================================
 subroutine set_physical_params(jr, use_rel)
@@ -220,6 +228,16 @@ subroutine fp2d_driver(dt, nt, use_rel)
         print *, '==================================='
     end if
 
+    if (fp2d_verbose) then
+    print *, '  f2D (i_res,1,jr_mid,1) = ', f2D (i_res,1,jr_mid,1)      ! p_par = +5
+    print *, '  f2D (nx+1-i_res,1,jr_mid,2) = ', &
+                f2D (nx+1-i_res,1,jr_mid,2)                             ! p_par = -5 (для k=2)
+    print *, '  asym k=1 (+p): f2D - f2D0 = ', &
+                f2D(i_res,1,jr_mid,1) - f2D0(i_res,1,jr_mid,1)
+    print *, '  asym k=2 (-p): f2D - f2D0 = ', &
+                f2D(nx+1-i_res,1,jr_mid,2) - f2D0(nx+1-i_res,1,jr_mid,2)
+    end if
+
     call fp2d_extract_1d(use_rel)
 
     ! ---- Развёрнутая диагностика (после того как fij/fij0 свежие) ----
@@ -238,29 +256,49 @@ end subroutine fp2d_driver
 
 
 !=======================================================================
+!=======================================================================
 subroutine interp_dql_2d(jr, k)
     integer, intent(in) :: jr, k
-    real(wp) :: p_par, D_val
-    integer  :: i, j
+    real(wp) :: p_par, D_val, dij_max
+    integer  :: i, j, n_nonzero
 
     D_QL2D(:,:,jr,k) = 0.0_wp
+    dij_max = maxval(dij(:,jr,k))
+    if (dij_max <= 0.0_wp) then
+        if (fp2d_verbose) &
+            print '(A,I0,A,I0)', '  interp_dql_2d: dij is zero  jr=', jr, '  k=', k
+        return
+    end if
 
+    n_nonzero = 0
     do j = 1, ny
         do i = 1, nx
             p_par = -p_max + dble(i-1)*dp_par
 
+            ! k=1 (ispectr=+1) -> p_par > 0 ;  k=2 (ispectr=-1) -> p_par < 0
             if (k == 1 .and. p_par < 0.0_wp) cycle
             if (k == 2 .and. p_par > 0.0_wp) cycle
 
             D_val = integrate_dij_cell(vij(:,jr), dij(:,jr,k), i0, &
                                         max(abs(p_par)-0.5_wp*dp_par, 0.0_wp), &
                                         abs(p_par)+0.5_wp*dp_par)
+
+            ! ---- guard against NaN/Inf only ----
+            if (.not. (D_val >= 0.0_wp)) D_val = 0.0_wp
+
             if (D_val > 0.0_wp) then
                 D_QL2D(i,j,jr,k) = D_QL_scale * D_val
+                n_nonzero = n_nonzero + 1
             end if
         end do
     end do
-end subroutine interp_dql_2d
+
+    if (fp2d_verbose) then
+        print '(A,I0,A,I0,A,I0,A,ES12.4)', &
+              '  interp_dql_2d: jr=', jr, '  k=', k, &
+              '  nnz=', n_nonzero, '  max=', maxval(D_QL2D(:,:,jr,k))
+    end if
+end subroutine
 
 !=======================================================================
 function interp_1d(xs, ys, n, x) result(y)
@@ -387,15 +425,15 @@ subroutine marginal_p_perp(f2, p_par_target, f_marg)
             do j = 1, ny
                 p_perp = p_perp_grid(j)
                 f_interp = f2(i,j) + (f2(i+1,j)-f2(i,j)) * &
-                            (p_par_target - p_par_i)/dp_par
-                if (j == 1 .or. j == ny) then
-                    integral = integral + 0.5_wp * f_interp * 2.0_wp*pi * &
-                               p_perp * dp_perp
-                else
-                    integral = integral + f_interp * 2.0_wp*pi * &
-                               p_perp * dp_perp
-                end if
-            end do
+                (p_par_target - p_par_i)/dp_par
+            if (j == 1) then
+                 integral = integral + f_interp * 0.25_wp * pi * dp_perp**2
+            else if (j == ny) then
+                    integral = integral + 0.5_wp * f_interp * 2.0_wp*pi * p_perp * dp_perp
+            else
+                    integral = integral + f_interp * 2.0_wp*pi * p_perp * dp_perp
+            end if
+    end do
             found = .TRUE.
             exit
         end if
@@ -582,9 +620,9 @@ subroutine fp2d_print_profiles(jr, k, label)
     real(wp), parameter :: ps(10) = (/ 0.0_wp, 0.5_wp, 1.0_wp, 2.0_wp, 3.0_wp, &
                                        5.0_wp, 7.0_wp, 10.0_wp, 20.0_wp, 40.0_wp /)
     if (k == 1) then
-        p_samp = -ps
-    else
         p_samp = ps
+    else
+        p_samp = - ps
     end if
 
     print *, '--- f2D profile (j_p⊥=1, jr=', jr, ', k=', k, ', ', &
@@ -608,21 +646,30 @@ subroutine fp2d_compute_moments(f2, n_val, mom_par, mom_sq)
     real(wp) :: p_par, p_perp, w
     integer  :: i, j
 
-    n_val   = 0.0_wp
-    mom_par = 0.0_wp
-    mom_sq  = 0.0_wp
+    n_val = 0.0_wp; mom_par = 0.0_wp; mom_sq = 0.0_wp
 
     do j = 1, ny
-        do i = 1, nx
-            p_par  = -p_max + dble(i-1)*dp_par
-            p_perp = dble(j-1)*dp_perp
-            w = 2.0_wp * pi * p_perp * dp_par * dp_perp
-            if (j == 1 .or. j == ny) w = w * 0.5_wp
-            if (i == 1 .or. i == nx) w = w * 0.5_wp
+        p_perp = dble(j-1)*dp_perp
 
-            n_val   = n_val   + w * f2(i,j)
-            mom_par = mom_par + w * p_par * f2(i,j)
-            mom_sq  = mom_sq  + w * (p_par**2 + p_perp**2) * f2(i,j)
+        if (j == 1) then
+            w = 0.25_wp * pi * dp_perp**2          ! π·dp²/4
+        else
+            w = 2.0_wp*pi * p_perp * dp_perp
+            if (j == ny) w = 0.5_wp * w
+        end if
+        w = w * dp_par                              ! <-- ДОБАВИТЬ
+
+        do i = 1, nx
+            p_par = -p_max + dble(i-1)*dp_par
+            if (i == 1 .or. i == nx) then
+                n_val   = n_val   + 0.5_wp * w * f2(i,j)
+                mom_par = mom_par + 0.5_wp * w * p_par * f2(i,j)
+                mom_sq  = mom_sq  + 0.5_wp * w * (p_par**2 + p_perp**2) * f2(i,j)
+            else
+                n_val   = n_val   + w * f2(i,j)
+                mom_par = mom_par + w * p_par * f2(i,j)
+                mom_sq  = mom_sq  + w * (p_par**2 + p_perp**2) * f2(i,j)
+            end if
         end do
     end do
 
@@ -736,9 +783,9 @@ subroutine fp2d_print_2d_slice(jr, k, label)
     print '(A12,5A14)', 'p_par\p_perp', '0', '2', '4', '6', '8'
     do ii = 1, 5
         if (k == 1) then
-            p_par_s = -pp * ii
+            p_par_s = pp * ii
         else
-            p_par_s =  pp * ii
+            p_par_s = - pp * ii
         end if
         call fp2d_find_i(p_par_s, i)
         write(*, '(F12.2,5ES14.4)') p_par_s, &
@@ -756,5 +803,96 @@ integer function fp2d_find_j_val(p_target) result(j_out)
     if (j_out < 1)  j_out = 1
     if (j_out > ny) j_out = ny
 end function fp2d_find_j_val
+
+
+!=======================================================================
+! Чистый тест сохранения максвелловского равновесия при D_QL=0, E=0
+!=======================================================================
+subroutine fp2d_conservation_test(nsteps, dt_step, use_rel, tol_rel)
+    integer,  intent(in) :: nsteps
+    real(wp), intent(in) :: dt_step
+    logical,  intent(in) :: use_rel
+    real(wp), intent(in), optional :: tol_rel
+
+    real(wp) :: f_test(nx,ny)
+    real(wp) :: D_zero(nx,ny)
+    real(wp) :: fmax0, fmax1, I0, I1, mp, mq
+    real(wp) :: rel_fmax, rel_I, tol
+    integer  :: istep
+
+    tol = 1.0e-3_wp
+    if (present(tol_rel)) tol = tol_rel
+
+    call set_physical_params(1, use_rel)
+    call set_solver_params(theta_e, z_eff, 0.0_wp, vte_over_c, &
+                            gamma_coll, use_rel)
+    call init_maxwell_juttner(f_test, theta_e, vte_over_c)
+    D_zero = 0.0_wp
+
+    call compute_2d_integrals(f_test, I0, mp, mq)
+    fmax0 = maxval(f_test)
+
+    print *, '=== FP2D conservation test (E=0, D_QL=0) ==='
+    print '(A,I4,A,ES15.5E3,A,ES15.5E3)', &
+          '  step=', 0, '   fmax=', fmax0, '   I=', I0
+    call fp2d_boundary_flux_diagnostic(f_test, 't=0')
+
+    do istep = 1, nsteps
+        call solve_fokker_planck_2d(f_test, D_zero, dt_step, 1)
+        call compute_2d_integrals(f_test, I1, mp, mq)
+        fmax1 = maxval(f_test)
+        rel_fmax = abs(fmax1 - fmax0)/max(abs(fmax0), 1.0e-30_wp)
+        rel_I    = abs(I1    - I0   )/max(abs(I0   ), 1.0e-30_wp)
+        print '(A,I4,2ES15.5E3,A,ES10.3,A,ES10.3)', &
+              '  step=', istep, fmax1, I1, &
+              '   dmax=', rel_fmax, '   dI=', rel_I
+        fmax0 = fmax1; I0 = I1
+    end do
+
+    call fp2d_boundary_flux_diagnostic(f_test, 't=end')
+    print *, '=== end of conservation test ==='
+    print '(A,ES15.5E3)', '  total rel. drift in maxval = ', rel_fmax
+    print '(A,ES15.5E3)', '  total rel. drift in I      = ', rel_I
+    if (rel_fmax > tol .or. rel_I > tol) then
+        print *, '*** WARNING: drift exceeds tolerance ', tol
+    end if
+end subroutine
+
+!=======================================================================
+! 2D интегралы N, <p_par>, <p²>
+!=======================================================================
+subroutine compute_2d_integrals(f2, N, Mp, Mq)
+    real(wp), intent(in)  :: f2(nx, ny)
+    real(wp), intent(out) :: N, Mp, Mq
+    real(wp) :: p_par, p_perp, w
+    integer  :: i, j
+
+    N = 0.0_wp; Mp = 0.0_wp; Mq = 0.0_wp
+    do j = 1, ny
+        p_perp = dble(j-1)*dp_perp
+
+        ! --- объём ячейки по p_perp ---
+        if (j == 1) then
+            w = 0.25_wp * pi * dp_perp**2          ! π·dp²/4
+        else
+            w = 2.0_wp*pi * p_perp * dp_perp
+            if (j == ny) w = 0.5_wp * w
+        end if
+        w = w * dp_par                              ! <-- ДОБАВИТЬ
+
+        do i = 1, nx
+            p_par = -p_max + dble(i-1)*dp_par
+            if (i == 1 .or. i == nx) then
+                N  = N  + 0.5_wp * w * f2(i,j)
+                Mp = Mp + 0.5_wp * w * p_par      * f2(i,j)
+                Mq = Mq + 0.5_wp * w * (p_par**2 + p_perp**2) * f2(i,j)
+            else
+                N  = N  + w * f2(i,j)
+                Mp = Mp + w * p_par      * f2(i,j)
+                Mq = Mq + w * (p_par**2 + p_perp**2) * f2(i,j)
+            end if
+        end do
+    end do
+end subroutine
 
 end module FP2D_bridge_mod
