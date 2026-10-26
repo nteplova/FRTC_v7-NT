@@ -57,7 +57,7 @@ module FP2D_bridge_mod
     ! ---- Диагностика ----
     logical, save :: fp2d_verbose = .TRUE.
 
-    integer, save :: fp2d_diag_level = 2
+    integer, save :: fp2d_diag_level = 0
     ! 0 — тишина
     ! 1 — только сводка (max, asym)
     ! 2 — + маргинал vs 1D, моменты, D_QL

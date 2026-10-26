@@ -4,11 +4,11 @@
   "spectrum": {
     "kind": "gauss_spectrum",
     "source": null,
-    "x_min": -5.0,
-    "x_max": 0.0,
-    "step": 0.1,
-    "bias": -2.0,
-    "sigma": 0.5,
+    "x_min": -2.0,
+    "x_max": -1.0,
+    "step": 0.01,
+    "bias": -1.6,
+    "sigma": 0.05,
     "coordinate_system": 0,
     "angle": 0.0,
     "PWM": false

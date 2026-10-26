@@ -11,7 +11,8 @@
       "title": "Chart 1",
       "y_label": "Value [arb. unit]",
       "data": [
-        "L"
+        "IPL",
+        "Iohm"
       ]
     },
     {
@@ -19,7 +20,6 @@
       "title": "Chart 2",
       "y_label": "Value [arb. unit]",
       "data": [
-        "Iohm",
         "ICD"
       ]
     },
