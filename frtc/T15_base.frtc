@@ -20,7 +20,7 @@
     "kv": 30
   },
   "numerical_parameters": {
-    "nr": 5,
+    "nr": 10,
     "hmin1": 1e-6,
     "rrange": 0.0001,
     "eps": 1e-6,
@@ -53,7 +53,7 @@
     "ipol": 1,
     "upl_fix": true,
     "upl_value": 0.0,
-    "fp_solver": 1,
+    "fp_solver": 2,
     "traj_len_seved": -1,
     "max_number_of_traj": 30000,
     "max_size_of_traj": 50000,

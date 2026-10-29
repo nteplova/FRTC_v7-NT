@@ -324,7 +324,7 @@ contains
 
     subroutine calculate_dfundv(ispectr)
         !! calculate dfundv что такое dfundv?
-        use constants, only: zero
+        use constants, only: zero, tiny
         use rt_parameters, only: nr
         !use plasma, only: fvt, vt0, cltn
         use small_vgrid, only: vrj, dfundv, vz1, vz2, vgrid, ipt
@@ -364,7 +364,8 @@ contains
                 end if
                 call linf(vvj,vdfj,vrj(i),dfout,klo,khi)
                 dfundv(i,j)=dfout/vto**2
-                if(dfundv(i,j).gt.zero) dfundv(i,j)=zero
+                !if(dfundv(i,j).gt.zero) dfundv(i,j)=zero
+                if (dfundv(i,j) > 0.0_wp) dfundv(i,j) = -tiny
             end do
         end do
         deallocate(vvj,vdfj)
@@ -373,7 +374,7 @@ contains
         
     subroutine recalculate_f_for_a_new_mesh(ispectr, iterat)
         !!   recalculate f' for a new mesh
-        use constants, only : zero
+        use constants, only : zero, tiny
         use rt_parameters, only : nr, ni1, ni2, cdel
         !use plasma, only: vt0, fvt, cltn
         use small_vgrid, only: vrj, dfundv, vz1, vz2, vgrid, gridvel
@@ -429,7 +430,8 @@ contains
                 call linf(vvj,vdfj,vrj(i),dfout,klo,khi)
                 vgrid(i,j)=vrj(i)*vto
                 dfundv(i,j)=dfout/vto**2
-                if(dfundv(i,j).gt.zero) dfundv(i,j)=zero
+               ! if(dfundv(i,j).gt.zero) dfundv(i,j)=zero
+               if (dfundv(i,j) > 0.0_wp) dfundv(i,j) = -tiny
             end do
             vz1(j)=v1
             vz2(j)=v2

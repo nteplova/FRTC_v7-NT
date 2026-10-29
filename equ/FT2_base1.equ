@@ -1,0 +1,103 @@
+
+!----------------- Times -----------------
+TSTART = 0.011d0;
+TEND = 0.03;
+TINIT = 0.026d0;
+!TPAUSE = 0.03d0;
+TSCALE = 0.015d0;
+
+DROUT = 1.d-4;
+DPOUT = 1.d-4;
+DTOUT = 1.d-5;
+DSTART = 0.026d0;
+
+CF1 = 0.1d-3;
+CF2 = 0.028d0;
+CF3 = 0.040d0;
+!----------------- Electrons parametrs -----------------
+CF14 = 1.5d0;
+
+NE:AS;
+NE = NEX;
+
+TE:AS;
+TE = TEX/1000;
+!----------------- Ion parametrs -----------------
+
+TI:AS;
+TI = TIX/1000;
+
+!----------------- Impurities -----------------
+
+AMAIN = AMJ;
+ZMAIN = ZMJ;
+
+!Carbon 
+
+AIM1 = 16;
+ZIM1 = 8;
+
+ZEF = 3.5d0
+
+!Its densities
+
+NIZ1 = NE*(ZEF-ZMJ)/(ZIM1-ZMJ)/ZIM1;
+NI = NE*(ZIM1-ZEF)/(ZIM1-ZMJ)/ZMJ;
+
+!----------------- Plasma parametrs -----------------
+!Current densities
+
+IPL=0.030;
+CU:EQ;
+CU = CUX;
+
+
+CAR31 = CNHR + CCMHD;
+CC = CAR31;
+
+!----------------- Equilibrium solver -----------------
+
+NEQUIL = 41;
+
+!----------------- LHCD & DrivenCurrent -----------------
+
+QLH = 0.2d0;
+
+debug:0.0001:DSTART::;
+saveprofiles::CF2:CF3:;
+lhcd2017(PELH):CF1:CF2:CF3:;
+drivencurrent(CULH,CAR32,CU)::CF2:CF3:;
+
+CD = CULH;
+CCD1 = VINT(PELHB);
+CCD2 = IINT(CULHB);
+
+!----------------- Radial output -----------------
+
+J\CU\-1;        Upl\UPL;            Poh\POH\-2;      E\UPL/RTOR/GP2;
+Jlh\CULH\-1;    Te\TE;              CC\CC\-3;        Q\1./MU;
+JBS\CUBS;       Ti\TI;            Plh\PELH\-2;     En\CAR24;
+Johm\CUOHM\8;   Ne\NE;              sig\CAR32\-3;    Chr\CAR31; 
+!----------------- Time output -----------------
+
+Ilh_ILHB_-10;       Qlh_QLH_-5;
+U_UPLB_-2;          Iohm_IOHMB_-10;
+Ux_ZRD2_-2;         IBSB_IBSB;
+Ipl_IPL_-10;        E_UPL/RTOR/GP2_-2;
+NEV_ABS((IPL-ILHB-IOHMB-IBSB));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

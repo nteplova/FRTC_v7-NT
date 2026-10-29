@@ -9,7 +9,7 @@
     {
       "name": "ax1",
       "title": "Chart 1",
-      "y_label": "Value [arb. unit]",
+      "y_label": "I MA",
       "data": [
         "IPL",
         "Iohm"

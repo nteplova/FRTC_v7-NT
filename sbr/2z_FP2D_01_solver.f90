@@ -21,14 +21,14 @@ module FP2D_solver_mod
         ! (исходные) p_max=120, nx=ny=129  -> dp_par≈1.88, dp_perp≈0.94 (слишком грубо у p~0)
         ! (новые)    p_max=10,  nx=ny=201  -> dp_par≈0.10, dp_perp≈0.05 (ядро при p_th≈0.03-0.1)
         ! ---
-        integer, parameter :: nx = 201
+        integer, parameter :: nx = 401
         integer, parameter :: ny = 201
 
-        real(wp), parameter :: p_max   = 20.0_wp
+        real(wp), parameter :: p_max   = 20.0_wp!20.0_wp
         real(wp), parameter :: dp_par  = 2.0_wp*p_max/dble(nx-1)
         real(wp), parameter :: dp_perp = p_max/dble(ny-1)
     real(wp), parameter :: eps_reg  = 1.0e-4_wp
-    real(wp), parameter :: v_min_reg = 0.05_wp   ! <-- новое
+    real(wp), parameter :: v_min_reg = 0.5_wp   ! <-- новое
     real(wp), parameter :: pi       = 3.14159265358979323846_wp
 
     real(wp), save :: theta_e    = 1.0e-3_wp
@@ -138,15 +138,17 @@ subroutine compute_stable_dt(D_QL, dt_in, dt, nt)
     real(wp), intent(out) :: dt
     integer,  intent(out) :: nt
 
-    real(wp) :: D_max, dt_max, p, v, gamma, D_tt
+    real(wp) :: D_max_par, D_max_perp, D_ql_max, dt_max_par, dt_max_perp
+    real(wp) :: dt_max, p, v, gamma, D_tt, D_pp
     integer  :: i, j
 
-    D_max = 0.0_wp
+    D_max_par  = 0.0_wp
+    D_max_perp = 0.0_wp
     do j = 1, ny
         do i = 1, nx
-            p = sqrt((-p_max + dble(i-1)*dp_par)**2 &
+        p = sqrt((-p_max + dble(i-1)*dp_par)**2 &
                    + (dble(j-1)*dp_perp)**2)
-            if (p < v_min_reg) p = v_min_reg          ! <-- согласовано с collision_coeffs
+            if (p < v_min_reg) p = v_min_reg
             if (use_relativistic) then
                 gamma = sqrt(1.0_wp + (p*vte_over_c)**2)
                 v = p/gamma
@@ -156,14 +158,26 @@ subroutine compute_stable_dt(D_QL, dt_in, dt, nt)
             end if
             D_tt = gamma_coll*(z_eff+1.0_wp) &
                  / (2.0_wp * max(v, v_min_reg) * max(gamma, 1.0_wp))
-            if (D_tt > D_max) D_max = D_tt
+        ! столкновительный D_pp (параллельный) для p_par
+        if (use_relativistic) then
+            D_pp = gamma_coll / (max(v, v_min_reg)**3 * max(gamma, 1.0_wp))
+        else
+            D_pp = gamma_coll / max(v, v_min_reg)**3
+        end if
+        ! по p_par: D_pp + D_QL ; по p_perp: D_tt
+        if (D_pp > D_max_par)  D_max_par  = D_pp
+        if (D_tt > D_max_perp) D_max_perp = D_tt
         end do
     end do
+    D_ql_max = maxval(D_QL)
+    D_max_par = max(D_max_par, D_ql_max)   ! D_QL только в p_par
 
-    ! консервативный шаг: по минимальному шагу сетки
-    dt_max = 0.25_wp * min(dp_par, dp_perp)**2 / max(D_max, eps_reg)
-    nt     = max(1, int(dt_in / dt_max) + 1)
-    dt     = dt_in / dble(nt)
+    dt_max_par  = 1.0_wp * dp_par**2  / max(D_max_par,  eps_reg)
+    dt_max_perp = 1.0_wp * dp_perp**2 / max(D_max_perp, eps_reg)
+    dt_max = min(dt_max_par, dt_max_perp)
+
+    nt = max(1, int(dt_in / dt_max) + 1)
+    dt = dt_in / dble(nt)
 end subroutine
 
 !=======================================================================
@@ -294,6 +308,62 @@ end subroutine apply_Ly
 !=======================================================================
 ! x-оператор: (I - dt*Lx)
 !=======================================================================
+! subroutine build_x_operator(j, D_QL, dt, a, b, c)
+!     integer,  intent(in)  :: j
+!     real(wp), intent(in)  :: D_QL(nx,ny), dt
+!     real(wp), intent(out) :: a(nx), b(nx), c(nx)
+
+!     real(wp) :: p_perp, dp, p_par_j, p_par_face
+!     real(wp) :: D_par_f, F_par_f, D_dum, F_dum
+!     real(wp) :: delta, w, ap_f, bp_f, am_f, bm_f
+!     real(wp) :: alpha, beta, gamma_, ql_coef
+!     integer  :: i
+
+!     a = 0.0_wp; b = 0.0_wp; c = 0.0_wp
+!     p_perp = dble(j-1)*dp_perp
+!     dp = dp_par
+
+    ! do i = 2, nx-1
+    !     p_par_j = -p_max + dble(i-1)*dp
+
+    !     ! --- грань i-1/2 (между i-1 и i) ---
+    !     p_par_face = p_par_j - 0.5_wp*dp
+    !     call collision_at_point(p_par_face, p_perp, &
+    !                             D_par_f, F_par_f, D_dum, F_dum)
+    !     call cc_weight(F_par_f*dp, D_par_f, delta, w)
+    !     am_f =  D_par_f/dp + F_par_f*delta
+    !     bm_f = -D_par_f/dp + F_par_f*(1.0_wp - delta)
+
+    !     ! --- грань i+1/2 (между i и i+1) ---
+    !     p_par_face = p_par_j + 0.5_wp*dp
+    !     call collision_at_point(p_par_face, p_perp, &
+    !                             D_par_f, F_par_f, D_dum, F_dum)
+    !     call cc_weight(F_par_f*dp, D_par_f, delta, w)
+    !     ap_f =  D_par_f/dp + F_par_f*delta
+    !     bp_f = -D_par_f/dp + F_par_f*(1.0_wp - delta)
+
+    !     alpha  =  am_f/dp
+    !     beta   = -(ap_f - bm_f)/dp
+    !     gamma_ = -bp_f/dp
+
+    !     ql_coef = D_QL(i,j)
+    !     alpha  = alpha  + ql_coef/dp**2
+    !     beta   = beta   - 2.0_wp*ql_coef/dp**2
+    !     gamma_ = gamma_ + ql_coef/dp**2
+
+    !     if (e_field > 0.0_wp) then
+    !         alpha = alpha - e_field/dp
+    !         beta  = beta  + e_field/dp
+    !     else if (e_field < 0.0_wp) then
+    !         beta  = beta  - e_field/dp
+    !         gamma_= gamma_+ e_field/dp
+    !     end if
+
+    !     a(i) = -dt*alpha
+    !     b(i) =  1.0_wp - dt*beta
+    !     c(i) = -dt*gamma_
+    ! end do
+
 subroutine build_x_operator(j, D_QL, dt, a, b, c)
     integer,  intent(in)  :: j
     real(wp), intent(in)  :: D_QL(nx,ny), dt
@@ -302,7 +372,8 @@ subroutine build_x_operator(j, D_QL, dt, a, b, c)
     real(wp) :: p_perp, dp, p_par_j, p_par_face
     real(wp) :: D_par_f, F_par_f, D_dum, F_dum
     real(wp) :: delta, w, ap_f, bp_f, am_f, bm_f
-    real(wp) :: alpha, beta, gamma_, ql_coef
+    real(wp) :: alpha, beta, gamma_
+    real(wp) :: ql_left, ql_right            ! <-- объявлено здесь
     integer  :: i
 
     a = 0.0_wp; b = 0.0_wp; c = 0.0_wp
@@ -312,11 +383,17 @@ subroutine build_x_operator(j, D_QL, dt, a, b, c)
     do i = 2, nx-1
         p_par_j = -p_max + dble(i-1)*dp
 
+        ! --- D_QL, усреднённая на грани (half-sum) ---
+        ql_left  = 0.5_wp * (D_QL(i-1,j) + D_QL(i,j))
+        ql_right = 0.5_wp * (D_QL(i,j)   + D_QL(i+1,j))
+
         ! --- грань i-1/2 (между i-1 и i) ---
         p_par_face = p_par_j - 0.5_wp*dp
         call collision_at_point(p_par_face, p_perp, &
                                 D_par_f, F_par_f, D_dum, F_dum)
+        D_par_f = D_par_f + ql_left                ! <-- D_QL внутрь D
         call cc_weight(F_par_f*dp, D_par_f, delta, w)
+        delta = max(0.0_wp, min(1.0_wp, delta))    ! <-- защита [0,1]
         am_f =  D_par_f/dp + F_par_f*delta
         bm_f = -D_par_f/dp + F_par_f*(1.0_wp - delta)
 
@@ -324,18 +401,16 @@ subroutine build_x_operator(j, D_QL, dt, a, b, c)
         p_par_face = p_par_j + 0.5_wp*dp
         call collision_at_point(p_par_face, p_perp, &
                                 D_par_f, F_par_f, D_dum, F_dum)
+        D_par_f = D_par_f + ql_right               ! <-- D_QL внутрь D
         call cc_weight(F_par_f*dp, D_par_f, delta, w)
+        delta = max(0.0_wp, min(1.0_wp, delta))
         ap_f =  D_par_f/dp + F_par_f*delta
         bp_f = -D_par_f/dp + F_par_f*(1.0_wp - delta)
 
+        ! --- сборка трёхдиагонального оператора ---
         alpha  =  am_f/dp
         beta   = -(ap_f - bm_f)/dp
         gamma_ = -bp_f/dp
-
-        ql_coef = D_QL(i,j)
-        alpha  = alpha  + ql_coef/dp**2
-        beta   = beta   - 2.0_wp*ql_coef/dp**2
-        gamma_ = gamma_ + ql_coef/dp**2
 
         if (e_field > 0.0_wp) then
             alpha = alpha - e_field/dp

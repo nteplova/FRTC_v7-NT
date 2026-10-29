@@ -7,14 +7,8 @@
 !   3 — 2D релятивистский
 !
 ! Отображение k ↔ знак p_par:
-!   В 1D-коде (см. 3_FokkerPlanck.f90, fokkerplanck_compute):
-! Отображение k ↔ знак p_par:
 !   k=1 (ispectr=+1, положительный спектр) → D_QL прикладывается к p_par > 0
 !   k=2 (ispectr=-1, отрицательный спектр) → D_QL прикладывается к p_par < 0
-!   В 2D-коде мы работаем с полным распределением на p_par ∈ [-p_max,+p_max],
-!   поэтому:
-!     k=1 → D_QL прикладывается к p_par > 0
-!     k=2 → D_QL прикладывается к p_par < 0
 !
 ! ВАЖНО: fij0 в этом модуле — это маргинал НАЧАЛЬНОГО максвеллиана
 ! (без E-поля и без волн). Это отличается от 1D-кода, где fij0 — решение
@@ -39,32 +33,18 @@ module FP2D_bridge_mod
     real(wp), parameter :: c_light = 3.0e10_wp
     real(wp), parameter :: m_e_c2  = 8.187e-7_wp
 
-    integer :: i_res
-
     ! ---- Множитель нормировки маргинала ----
-    ! Если f2D содержит (2π)^{-3/2} exp(-p²/2), то marginal = ∫ f 2π p_⊥ dp_⊥
-    ! Если f2D содержит exp(-p²/2) без префактора, то нормировку нужно
-    ! задавать так, чтобы результат совпадал с 1D-кодом:
-    !   f_1D(v) = exp(-v²/2) / sqrt(2π)
+    ! f_1D(v) = exp(-v²/2) / sqrt(2π)
     real(wp), parameter :: norm_2pi32 = 15.7496099457224_wp   ! (2π)^{3/2}
 
     ! ---- Масштаб для D_QL ----
-    ! Исторически в bridge стоял множитель 0.1. Оставлен как именованная
-    ! константа, чтобы его можно было обнулить или откалибровать.
-    ! Должен быть 1.0 для прямого соответствия 1D-коду!
-    real(wp), parameter :: D_QL_scale = 1.0_wp !!!1.0_wp
+    ! Должен быть 1.0 для прямого соответствия 1D-коду.
+    real(wp), parameter :: D_QL_scale = 1.0_wp
 
-    ! ---- Диагностика ----
-    logical, save :: fp2d_verbose = .TRUE.
-
-    integer, save :: fp2d_diag_level = 0
-    ! 0 — тишина
-    ! 1 — только сводка (max, asym)
-    ! 2 — + маргинал vs 1D, моменты, D_QL
-    ! 3 — + профили f2D и 5×5 срез
-    ! 4 — + fp2d_solver_stats после каждого solve
-
-   ! print *, '=== FP2D 16:16 ==='
+    ! ---- Диагностика: печать ОДИН раз за прогон ----
+    logical, save :: fp2d_verbose     = .FALSE.
+    integer, save :: fp2d_diag_level  = 0
+    logical, save :: fp2d_diag_done   = .FALSE.
 
 contains
 
@@ -75,6 +55,9 @@ subroutine fp2d_reset()
     if (allocated(D_QL2D)) deallocate(D_QL2D)
     fp2d_initialized = .FALSE.
     fp2d_rel_saved   = .FALSE.
+    fp2d_verbose     = .FALSE.
+    fp2d_diag_level  = 0
+    fp2d_diag_done   = .FALSE.
 end subroutine fp2d_reset
 
 !=======================================================================
@@ -85,10 +68,10 @@ subroutine fp2d_init(use_rel)
     call fp2d_reset()
 
     allocate(f2D(nx, ny, nr, 2))
-    allocate(f2D0(nx, ny, nr, 2))                    ! <-- добавить
+    allocate(f2D0(nx, ny, nr, 2))
     allocate(D_QL2D(nx, ny, nr, 2))
     f2D    = 0.0_wp
-    f2D0   = 0.0_wp                                   ! <-- добавить
+    f2D0   = 0.0_wp
     D_QL2D = 0.0_wp
 
     call get_2d_grid(p_par_grid, p_perp_grid)
@@ -97,14 +80,14 @@ subroutine fp2d_init(use_rel)
         call set_physical_params(jr, use_rel)
         call init_maxwell_juttner(f2D(:,:,jr,1), theta_e, vte_over_c)
         call init_maxwell_juttner(f2D(:,:,jr,2), theta_e, vte_over_c)
-        call init_maxwell_juttner(f2D0(:,:,jr,1), theta_e, vte_over_c)   ! <--
-        call init_maxwell_juttner(f2D0(:,:,jr,2), theta_e, vte_over_c)   ! <--
+        call init_maxwell_juttner(f2D0(:,:,jr,1), theta_e, vte_over_c)
+        call init_maxwell_juttner(f2D0(:,:,jr,2), theta_e, vte_over_c)
     end do
 
     fp2d_initialized = .TRUE.
     fp2d_rel_saved   = use_rel
 
-        if (fp2d_verbose) then
+    if (fp2d_verbose) then
         print *, '=== FP2D init ==='
         print *, '  use_relativistic = ', use_rel
         print *, '  nx, ny, nr       = ', nx, ny, nr
@@ -113,25 +96,19 @@ subroutine fp2d_init(use_rel)
         print *, '  maxval(f2D)      = ', maxval(f2D)
         print *, '  maxval(f2D0)     = ', maxval(f2D0)
         print *, '  diag_level       = ', fp2d_diag_level
-        print *, '  i(0)   = ', nint(p_max/dp_par) + 1
-        print *, '  i(±5)  = ', nint((p_max-5.0_wp)/dp_par)+1, &
-                                nint((p_max+5.0_wp)/dp_par)+1
-        print *, '  i(±20) = ', nint((p_max-20.0_wp)/dp_par)+1, &
-                                nint((p_max+20.0_wp)/dp_par)+1
         call fp2d_solver_stats(f2D(:,:,1,1),  'f2D  jr=1 k=1')
         call fp2d_solver_stats(f2D0(:,:,1,1), 'f2D0 jr=1 k=1')
         print *, '================='
     end if
 
-if (fp2d_verbose .and. fp2d_diag_level >= 4) then
-    print *, '=== running clean self-test (D_QL=0, E=0) ==='
-    call fp2d_conservation_test(nsteps=20, dt_step=0.01_wp, &
-                                use_rel=use_rel, tol_rel=1.0e-3_wp)
-    print *, '=== end of self-test ==='
-end if
+    if (fp2d_verbose .and. fp2d_diag_level >= 4) then
+        print *, '=== running clean self-test (D_QL=0, E=0) ==='
+        call fp2d_conservation_test(nsteps=20, dt_step=0.01_wp, &
+                                    use_rel=use_rel, tol_rel=1.0e-3_wp)
+        print *, '=== end of self-test ==='
+    end if
 
 end subroutine fp2d_init
-
 
 !=======================================================================
 subroutine set_physical_params(jr, use_rel)
@@ -156,20 +133,25 @@ subroutine fp2d_driver(dt, nt, use_rel)
     real(wp), intent(in) :: dt
     integer,  intent(in) :: nt
     logical,  intent(in) :: use_rel
-    integer  :: jr, k, nt_local, jr_mid
+    integer  :: jr, k, nt_local, jr_res, i_res_l
     real(wp) :: f2d_max_before, f2d_max_after, DQL_max
     real(wp) :: dtau_total, dt_local
-    real(wp), parameter :: dt0 = 0.01_wp
+    real(wp), parameter :: dt0     = 1.0_wp
+    real(wp), parameter :: rho_res = 0.05_wp   ! ρ≈0.05 — резонанс в 1D
 
+    ! --- Инициализация; печатаем init-диагностику один раз ---
     if (.not. fp2d_initialized) then
+        fp2d_verbose    = .TRUE.
+        fp2d_diag_level = 2
         call fp2d_init(use_rel)
+        fp2d_diag_done  = .FALSE.   ! разрешить один блок print_all
     else if (use_rel .neqv. fp2d_rel_saved) then
         call fp2d_init(use_rel)
     end if
 
     f2d_max_before = maxval(f2D)
 
-        block
+    block
     real(wp) :: D_zero(nx, ny)
     D_zero = 0.0_wp
 
@@ -183,7 +165,7 @@ subroutine fp2d_driver(dt, nt, use_rel)
         dt_local = dtau_total / dble(nt_local)
 
         do k = 1, 2
-            ! --- 1. Всегда эволюционируем f2D0 (только столкновения, без волн) ---
+            ! --- 1. f2D0: только столкновения ---
             call solve_fokker_planck_2d(f2D0(:,:,jr,k), D_zero, &
                                          dt_local, nt_local)
 
@@ -191,7 +173,6 @@ subroutine fp2d_driver(dt, nt, use_rel)
             call interp_dql_2d(jr, k)
 
             if (maxval(D_QL2D(:,:,jr,k)) < 1.0e-20_wp) then
-                ! Волн нет — f2D совпадает с f2D0 (без аналитики)
                 f2D(:,:,jr,k) = f2D0(:,:,jr,k)
                 cycle
             end if
@@ -205,57 +186,53 @@ subroutine fp2d_driver(dt, nt, use_rel)
     f2d_max_after = maxval(f2D)
     DQL_max       = maxval(D_QL2D)
 
+    jr_res = max(1, min(nr, nint(rho_res * dble(nr+1))))
+
+    ! --- Сводка по слою (один раз за прогон) ---
     if (fp2d_verbose) then
-        
-        jr_mid = nr/2
-        if (jr_mid < 1) jr_mid = 1
-        i_res = nint((5.0_wp + p_max) / dp_par) + 1
-        if (i_res < 1)  i_res = 1
-        if (i_res > nx) i_res = nx
+        i_res_l = nint((5.0_wp + p_max) / dp_par) + 1
+        if (i_res_l < 1)  i_res_l = 1
+        if (i_res_l > nx) i_res_l = nx
         print *, '=== FP2D diagnostics ==='
+        print *, '  jr_res, rho_res        = ', jr_res, &
+                 dble(jr_res)/dble(nr+1)
+        print *, '  p_par at i_res         = ', p_par_grid(i_res_l)
         print *, '  maxval(D_QL2D)         = ', DQL_max
         print *, '  maxval(f2D) до solve   = ', f2d_max_before
         print *, '  maxval(f2D) после      = ', f2d_max_after
-        print *, '  p_par_grid(i_res)      = ', p_par_grid(i_res)
-        print *, '  f2D (i_res,1,jr_mid,1) = ', f2D (i_res,1,jr_mid,1)
-        print *, '  f2D0(i_res,1,jr_mid,1) = ', f2D0(i_res,1,jr_mid,1)
-        print *, '  f2D (i_res,1,jr_mid,2) = ', f2D (i_res,1,jr_mid,2)
-        print *, '  f2D0(i_res,1,jr_mid,2) = ', f2D0(i_res,1,jr_mid,2)
-        print *, '  asym k=2: f2D - f2D0   = ', &
-                    f2D(i_res,1,jr_mid,2) - f2D0(i_res,1,jr_mid,2)
+        print *, '  f2D (i_res,1,jr_res,1) = ', f2D (i_res_l,1,jr_res,1)
+        print *, '  f2D0(i_res,1,jr_res,1) = ', f2D0(i_res_l,1,jr_res,1)
+        print *, '  f2D (i_res,1,jr_res,2) = ', f2D (i_res_l,1,jr_res,2)
+        print *, '  f2D0(i_res,1,jr_res,2) = ', f2D0(i_res_l,1,jr_res,2)
+        print *, '  asym k=1 (+p): f2D - f2D0 = ', &
+                    f2D(i_res_l,1,jr_res,1) - f2D0(i_res_l,1,jr_res,1)
+        print *, '  asym k=2 (-p): f2D - f2D0 = ', &
+                    f2D(nx+1-i_res_l,1,jr_res,2) - &
+                    f2D0(nx+1-i_res_l,1,jr_res,2)
         print *, '  dtau, nt_local, dt     = ', &
                     dtau_total, nt_local, dt_local
         print *, '==================================='
     end if
 
-    if (fp2d_verbose) then
-    print *, '  f2D (i_res,1,jr_mid,1) = ', f2D (i_res,1,jr_mid,1)      ! p_par = +5
-    print *, '  f2D (nx+1-i_res,1,jr_mid,2) = ', &
-                f2D (nx+1-i_res,1,jr_mid,2)                             ! p_par = -5 (для k=2)
-    print *, '  asym k=1 (+p): f2D - f2D0 = ', &
-                f2D(i_res,1,jr_mid,1) - f2D0(i_res,1,jr_mid,1)
-    print *, '  asym k=2 (-p): f2D - f2D0 = ', &
-                f2D(nx+1-i_res,1,jr_mid,2) - f2D0(nx+1-i_res,1,jr_mid,2)
-    end if
-
     call fp2d_extract_1d(use_rel)
 
-    ! ---- Развёрнутая диагностика (после того как fij/fij0 свежие) ----
-    jr_mid = nr/2
-    if (jr_mid < 1) jr_mid = 1
-    if (fp2d_diag_level >= 2) then
-        call fp2d_print_all(jr_mid, 1, 'jr_mid k=1 (pos)')
-        call fp2d_print_all(jr_mid, 2, 'jr_mid k=2 (neg)')
+    ! --- Развёрнутая диагностика резонансного слоя — один раз ---
+    if (fp2d_diag_level >= 2 .and. .not. fp2d_diag_done) then
+        call fp2d_print_all(jr_res, 1, 'jr_res k=1 (pos)')
+        call fp2d_print_all(jr_res, 2, 'jr_res k=2 (neg)')
+        if (fp2d_diag_level >= 3) then
+            call fp2d_print_2d_slice(jr_res, 1, 'jr_res k=1')
+            call fp2d_print_2d_slice(jr_res, 2, 'jr_res k=2')
+        end if
+        fp2d_diag_done = .TRUE.
     end if
-    if (fp2d_diag_level >= 3) then
-        call fp2d_print_2d_slice(jr_mid, 1, 'jr_mid k=1')
-        call fp2d_print_2d_slice(jr_mid, 2, 'jr_mid k=2')
-    end if
+
+    ! --- Выключаем диагностику после первого прохода ---
+    fp2d_verbose    = .FALSE.
+    fp2d_diag_level = 0
 
 end subroutine fp2d_driver
 
-
-!=======================================================================
 !=======================================================================
 subroutine interp_dql_2d(jr, k)
     integer, intent(in) :: jr, k
@@ -264,26 +241,22 @@ subroutine interp_dql_2d(jr, k)
 
     D_QL2D(:,:,jr,k) = 0.0_wp
     dij_max = maxval(dij(:,jr,k))
-    if (dij_max <= 0.0_wp) then
-        if (fp2d_verbose) &
-            print '(A,I0,A,I0)', '  interp_dql_2d: dij is zero  jr=', jr, '  k=', k
-        return
-    end if
+    if (dij_max <= 0.0_wp) return
 
     n_nonzero = 0
     do j = 1, ny
         do i = 1, nx
             p_par = -p_max + dble(i-1)*dp_par
 
-            ! k=1 (ispectr=+1) -> p_par > 0 ;  k=2 (ispectr=-1) -> p_par < 0
+            ! k=1 → p_par > 0 ;  k=2 → p_par < 0
             if (k == 1 .and. p_par < 0.0_wp) cycle
             if (k == 2 .and. p_par > 0.0_wp) cycle
 
+            ! Усреднение dij по 2D-ячейке — интеграл сохраняется точно
             D_val = integrate_dij_cell(vij(:,jr), dij(:,jr,k), i0, &
                                         max(abs(p_par)-0.5_wp*dp_par, 0.0_wp), &
                                         abs(p_par)+0.5_wp*dp_par)
 
-            ! ---- guard against NaN/Inf only ----
             if (.not. (D_val >= 0.0_wp)) D_val = 0.0_wp
 
             if (D_val > 0.0_wp) then
@@ -301,37 +274,8 @@ subroutine interp_dql_2d(jr, k)
 end subroutine
 
 !=======================================================================
-function interp_1d(xs, ys, n, x) result(y)
-    real(wp), intent(in) :: xs(:), ys(:), x
-    integer,  intent(in) :: n
-    real(wp) :: y
-    integer  :: k
-
-    y = 0.0_wp
-    if (x <= xs(1)) then
-        y = ys(1); return
-    end if
-    if (x >= xs(n)) then
-        y = ys(n); return
-    end if
-
-    do k = 1, n-1
-        if (x >= xs(k) .and. x <= xs(k+1)) then
-            if (abs(xs(k+1)-xs(k)) > 1.0e-30_wp) then
-                y = ys(k) + (ys(k+1)-ys(k))*(x-xs(k))/(xs(k+1)-xs(k))
-            else
-                y = 0.5_wp*(ys(k)+ys(k+1))
-            end if
-            return
-        end if
-    end do
-end function interp_1d
-
-!=======================================================================
 function integrate_dij_cell(xs, ys, n, x_lo, x_hi) result(y)
-    !! Усреднение dij по ячейке [x_lo, x_hi]:
-    !!   y = (1/(x_hi-x_lo)) · ∫ dij dx
-    !! Интеграл dij по ячейке сохраняется точно → полная мощность волн.
+    !! Среднее dij по ячейке [x_lo, x_hi]. Интеграл сохраняется точно.
     real(wp), intent(in) :: xs(:), ys(:), x_lo, x_hi
     integer,  intent(in) :: n
     real(wp) :: y
@@ -369,6 +313,15 @@ subroutine fp2d_extract_1d(use_rel)
     real(wp) :: p, p_par, f_marg, f_marg_init
 
     do jr = 1, nr
+        if (fp2d_verbose) then
+            do k = 1, 2
+                print *, 'jr=', jr, ' k=', k, &
+                    ' min dfij =', minval(dfij(:,jr,k)), &
+                    ' max|dfij| =', maxval(abs(dfij(:,jr,k))), &
+                    ' max dij  =', maxval(dij(:,jr,k)), &
+                    ' max D_QL2D =', maxval(D_QL2D(:,:,jr,k))
+            end do
+        end if
         do i = 1, i0
             p = vij(i, jr)
             do k = 1, 2
@@ -377,7 +330,7 @@ subroutine fp2d_extract_1d(use_rel)
                 else if (k == 1) then
                     p_par = p
                 else
-                    p_par = - p 
+                    p_par = -p
                 end if
 
                 call marginal_p_perp(f2D (:,:,jr,k), p_par, f_marg)
@@ -387,22 +340,12 @@ subroutine fp2d_extract_1d(use_rel)
                 fij0(i, jr, k) = f_marg_init
             end do
         end do
-        call compute_dfij(jr)
+        ! call compute_dfij(jr)
+        ! ВАЖНО: compute_dfij НЕ вызывается намеренно.
+        ! В 1D-коде dfij тоже не обновляется — остаётся начальным максвелловским.
+        ! Чтобы 1D и 2D были в одинаковых условиях при вычислении dfundv
+        ! (plasma::calculate_dfundv), оставляем dfij фиксированным.
     end do
-
-    if (fp2d_verbose) then
-        print *, '=== FP2D extract (jr_mid) ==='
-        print *, '  fij (33,k=1), fij (33,k=2) = ', &
-                    fij (33,nr/2,1), fij (33,nr/2,2)
-        print *, '  fij0(33,k=1), fij0(33,k=2) = ', &
-                    fij0(33,nr/2,1), fij0(33,nr/2,2)
-        print *, '  diff k=1, diff k=2         = ', &
-                    fij(33,nr/2,1)-fij0(33,nr/2,1), &
-                    fij(33,nr/2,2)-fij0(33,nr/2,2)
-        print *, '  asym = fij(k=2) - fij(k=1) = ', &
-                    fij(33,nr/2,2) - fij(33,nr/2,1)
-        print *, '============================='
-    end if
 end subroutine fp2d_extract_1d
 
 !=======================================================================
@@ -426,14 +369,14 @@ subroutine marginal_p_perp(f2, p_par_target, f_marg)
                 p_perp = p_perp_grid(j)
                 f_interp = f2(i,j) + (f2(i+1,j)-f2(i,j)) * &
                 (p_par_target - p_par_i)/dp_par
-            if (j == 1) then
-                 integral = integral + f_interp * 0.25_wp * pi * dp_perp**2
-            else if (j == ny) then
+                if (j == 1) then
+                    integral = integral + f_interp * 0.25_wp * pi * dp_perp**2
+                else if (j == ny) then
                     integral = integral + 0.5_wp * f_interp * 2.0_wp*pi * p_perp * dp_perp
-            else
+                else
                     integral = integral + f_interp * 2.0_wp*pi * p_perp * dp_perp
-            end if
-    end do
+                end if
+            end do
             found = .TRUE.
             exit
         end if
@@ -445,42 +388,6 @@ subroutine marginal_p_perp(f2, p_par_target, f_marg)
         f_marg = 0.0_wp
     end if
 end subroutine marginal_p_perp
-
-!=======================================================================
-subroutine marginal_maxwell(p_par_target, jr, use_rel, f_marg)
-    real(wp), intent(in)  :: p_par_target
-    integer,  intent(in)  :: jr
-    logical,  intent(in)  :: use_rel
-    real(wp), intent(out) :: f_marg
-    real(wp) :: p_perp, p, gamma, f_val, w, integral
-    real(wp), parameter :: dpp = 0.1_wp
-    integer  :: j
-
-    call set_physical_params(jr, use_rel)
-
-    integral = 0.0_wp
-    do j = 1, 200
-        p_perp = dble(j-1)*dpp
-        p = sqrt(p_par_target**2 + p_perp**2)
-
-        if (use_rel) then
-            gamma = sqrt(1.0_wp + (p*vte_over_c)**2)
-            f_val = exp(-(gamma - 1.0_wp)/theta_e)
-        else
-            f_val = exp(-0.5_wp * p**2)
-        end if
-
-        if (j == 1 .or. j == 200) then
-            w = 0.5_wp
-        else
-            w = 1.0_wp
-        end if
-
-        integral = integral + w * f_val * 2.0_wp*pi * p_perp * dpp
-    end do
-
-    f_marg = integral / norm_2pi32
-end subroutine marginal_maxwell
 
 !=======================================================================
 subroutine compute_dfij(jr)
@@ -521,10 +428,7 @@ subroutine fp2d_save(time)
           trim(tag), time
 
     inquire(file=fname, exist=exist)
-    if (exist) then
-        !print *, 'fp2d_save: file exists, skip ', trim(fname)
-        return
-    end if
+    if (exist) return
 
     open(iu, file=fname, status='new', action='write', &
          access='stream', form='unformatted')
@@ -542,8 +446,6 @@ subroutine fp2d_save(time)
 end subroutine fp2d_save
 
 !=======================================================================
-! Хелперы: индексы сетки по заданному импульсу
-!=======================================================================
 subroutine fp2d_find_i(p_target, i_out)
     real(wp), intent(in)  :: p_target
     integer,  intent(out) :: i_out
@@ -552,16 +454,6 @@ subroutine fp2d_find_i(p_target, i_out)
     if (i_out > nx) i_out = nx
 end subroutine fp2d_find_i
 
-subroutine fp2d_find_j(p_target, j_out)
-    real(wp), intent(in)  :: p_target
-    integer,  intent(out) :: j_out
-    j_out = nint(p_target / dp_perp) + 1
-    if (j_out < 1)  j_out = 1
-    if (j_out > ny) j_out = ny
-end subroutine fp2d_find_j
-
-!=======================================================================
-! Объединённая печать: маргинал vs 1D + моменты + D_QL
 !=======================================================================
 subroutine fp2d_print_all(jr, k, label)
     integer,          intent(in) :: jr, k
@@ -572,8 +464,6 @@ subroutine fp2d_print_all(jr, k, label)
     call fp2d_print_dql      (jr, k, label)
 end subroutine fp2d_print_all
 
-!=======================================================================
-! Маргинал f_2D, f_2D0 и их сравнение с 1D fij/fij0
 !=======================================================================
 subroutine fp2d_print_marginal_1d(jr, k, label)
     integer,          intent(in) :: jr, k
@@ -610,8 +500,6 @@ subroutine fp2d_print_marginal_1d(jr, k, label)
 end subroutine fp2d_print_marginal_1d
 
 !=======================================================================
-! Профиль f2D и f2D0 вдоль p_perp=0 (j=1) в разных p_par
-!=======================================================================
 subroutine fp2d_print_profiles(jr, k, label)
     integer,          intent(in) :: jr, k
     character(len=*), intent(in) :: label
@@ -622,7 +510,7 @@ subroutine fp2d_print_profiles(jr, k, label)
     if (k == 1) then
         p_samp = ps
     else
-        p_samp = - ps
+        p_samp = -ps
     end if
 
     print *, '--- f2D profile (j_p⊥=1, jr=', jr, ', k=', k, ', ', &
@@ -638,8 +526,6 @@ subroutine fp2d_print_profiles(jr, k, label)
 end subroutine fp2d_print_profiles
 
 !=======================================================================
-! Моменты ∫f, ∫vf, ∫v²f: 2D vs 2D0 vs 1D vs 1D0
-!=======================================================================
 subroutine fp2d_compute_moments(f2, n_val, mom_par, mom_sq)
     real(wp), intent(in)  :: f2(nx, ny)
     real(wp), intent(out) :: n_val, mom_par, mom_sq
@@ -650,14 +536,13 @@ subroutine fp2d_compute_moments(f2, n_val, mom_par, mom_sq)
 
     do j = 1, ny
         p_perp = dble(j-1)*dp_perp
-
         if (j == 1) then
-            w = 0.25_wp * pi * dp_perp**2          ! π·dp²/4
+            w = 0.25_wp * pi * dp_perp**2
         else
             w = 2.0_wp*pi * p_perp * dp_perp
             if (j == ny) w = 0.5_wp * w
         end if
-        w = w * dp_par                              ! <-- ДОБАВИТЬ
+        w = w * dp_par
 
         do i = 1, nx
             p_par = -p_max + dble(i-1)*dp_par
@@ -712,23 +597,20 @@ subroutine fp2d_print_moments(jr, k, label)
 end subroutine fp2d_print_moments
 
 !=======================================================================
-! Статистика D_QL2D: max, координаты, интеграл, сравнение с 1D
-!=======================================================================
 subroutine fp2d_print_dql(jr, k, label)
     integer,          intent(in) :: jr, k
     character(len=*), intent(in) :: label
-    real(wp) :: dql_max, dql_int, p_par, p_perp, w
+    real(wp) :: dql_max, dql_int, p_perp, w
     real(wp) :: dij_max, dij_int, dv
     integer  :: i, j, i_max, j_max, n_above
 
     dql_max = 0.0_wp
     dql_int = 0.0_wp
     i_max = 1; j_max = 1
-    n_above = 0
 
+    ! Проход 1: max, интеграл, координаты пика
     do j = 1, ny
         do i = 1, nx
-            p_par  = -p_max + dble(i-1)*dp_par
             p_perp = dble(j-1)*dp_perp
             w = 2.0_wp*pi*p_perp*dp_par*dp_perp
             dql_int = dql_int + w * D_QL2D(i,j,jr,k)
@@ -736,7 +618,15 @@ subroutine fp2d_print_dql(jr, k, label)
                 dql_max = D_QL2D(i,j,jr,k)
                 i_max = i; j_max = j
             end if
-            if (D_QL2D(i,j,jr,k) > 0.1_wp * dql_max) n_above = n_above + 1
+        end do
+    end do
+
+    ! Проход 2: количество точек > 0.1·max (порог теперь известен)
+    n_above = 0
+    do j = 1, ny
+        do i = 1, nx
+            if (D_QL2D(i,j,jr,k) > 0.1_wp * dql_max) &
+                n_above = n_above + 1
         end do
     end do
 
@@ -761,11 +651,6 @@ subroutine fp2d_print_dql(jr, k, label)
 end subroutine fp2d_print_dql
 
 !=======================================================================
-! 5×5 срез f2D в плоскости (p_par, p_perp)
-!=======================================================================
-!=======================================================================
-! 5×5 срез f2D в плоскости (p_par, p_perp)
-!=======================================================================
 subroutine fp2d_print_2d_slice(jr, k, label)
     integer,          intent(in) :: jr, k
     character(len=*), intent(in) :: label
@@ -785,7 +670,7 @@ subroutine fp2d_print_2d_slice(jr, k, label)
         if (k == 1) then
             p_par_s = pp * ii
         else
-            p_par_s = - pp * ii
+            p_par_s = -pp * ii
         end if
         call fp2d_find_i(p_par_s, i)
         write(*, '(F12.2,5ES14.4)') p_par_s, &
@@ -793,9 +678,6 @@ subroutine fp2d_print_2d_slice(jr, k, label)
     end do
 end subroutine fp2d_print_2d_slice
 
-
-!=======================================================================
-! Вспомогательная: значение индекса j для заданного p_perp
 !=======================================================================
 integer function fp2d_find_j_val(p_target) result(j_out)
     real(wp), intent(in) :: p_target
@@ -804,9 +686,6 @@ integer function fp2d_find_j_val(p_target) result(j_out)
     if (j_out > ny) j_out = ny
 end function fp2d_find_j_val
 
-
-!=======================================================================
-! Чистый тест сохранения максвелловского равновесия при D_QL=0, E=0
 !=======================================================================
 subroutine fp2d_conservation_test(nsteps, dt_step, use_rel, tol_rel)
     integer,  intent(in) :: nsteps
@@ -856,10 +735,8 @@ subroutine fp2d_conservation_test(nsteps, dt_step, use_rel, tol_rel)
     if (rel_fmax > tol .or. rel_I > tol) then
         print *, '*** WARNING: drift exceeds tolerance ', tol
     end if
-end subroutine
+end subroutine fp2d_conservation_test
 
-!=======================================================================
-! 2D интегралы N, <p_par>, <p²>
 !=======================================================================
 subroutine compute_2d_integrals(f2, N, Mp, Mq)
     real(wp), intent(in)  :: f2(nx, ny)
@@ -870,15 +747,13 @@ subroutine compute_2d_integrals(f2, N, Mp, Mq)
     N = 0.0_wp; Mp = 0.0_wp; Mq = 0.0_wp
     do j = 1, ny
         p_perp = dble(j-1)*dp_perp
-
-        ! --- объём ячейки по p_perp ---
         if (j == 1) then
-            w = 0.25_wp * pi * dp_perp**2          ! π·dp²/4
+            w = 0.25_wp * pi * dp_perp**2
         else
             w = 2.0_wp*pi * p_perp * dp_perp
             if (j == ny) w = 0.5_wp * w
         end if
-        w = w * dp_par                              ! <-- ДОБАВИТЬ
+        w = w * dp_par
 
         do i = 1, nx
             p_par = -p_max + dble(i-1)*dp_par
@@ -893,6 +768,6 @@ subroutine compute_2d_integrals(f2, N, Mp, Mq)
             end if
         end do
     end do
-end subroutine
+end subroutine compute_2d_integrals
 
 end module FP2D_bridge_mod
