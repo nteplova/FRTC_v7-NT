@@ -21,8 +21,8 @@ module FP2D_solver_mod
         ! (исходные) p_max=120, nx=ny=129  -> dp_par≈1.88, dp_perp≈0.94 (слишком грубо у p~0)
         ! (новые)    p_max=10,  nx=ny=201  -> dp_par≈0.10, dp_perp≈0.05 (ядро при p_th≈0.03-0.1)
         ! ---
-        integer, parameter :: nx = 401
-        integer, parameter :: ny = 201
+        integer, parameter :: nx = 201
+        integer, parameter :: ny = 101
 
         real(wp), parameter :: p_max   = 20.0_wp!20.0_wp
         real(wp), parameter :: dp_par  = 2.0_wp*p_max/dble(nx-1)
@@ -113,14 +113,22 @@ subroutine solve_fokker_planck_2d(f, D_QL, dt_in, nt_in)
             call build_y_operator(i, dt, ay, by, cy)
             call tridiag(ny, ay, by, cy, rhs(i,:), f(i,:))
         end do
-
+        !диагностика
+        if (step == nt) then
+            print *, 'step', step, ' min(f) before clip = ', minval(f), ' max(f) = ', maxval(f)
+        end if
         ! Защита от отрицательных значений и выбросов
-        do j = 1, ny
-            do i = 1, nx
-                if (f(i,j) < 0.0_wp) f(i,j) = 0.0_wp
-                if (f(i,j) > 1.0e10_wp) f(i,j) = 1.0e10_wp
+        block
+            real(wp) :: f_max_val, f_floor
+            f_max_val = maxval(f)
+            f_floor = 1.0e-14_wp * f_max_val
+            do j = 1, ny
+                do i = 1, nx
+                    if (f(i,j) < f_floor) f(i,j) = f_floor
+                    if (f(i,j) > 1.0e10_wp) f(i,j) = 1.0e10_wp
+                end do
             end do
-        end do
+        end block
     end do
 
     do j = 1, ny
@@ -172,8 +180,8 @@ subroutine compute_stable_dt(D_QL, dt_in, dt, nt)
     D_ql_max = maxval(D_QL)
     D_max_par = max(D_max_par, D_ql_max)   ! D_QL только в p_par
 
-    dt_max_par  = 1.0_wp * dp_par**2  / max(D_max_par,  eps_reg)
-    dt_max_perp = 1.0_wp * dp_perp**2 / max(D_max_perp, eps_reg)
+    dt_max_par  = 0.1_wp * dp_par**2  / max(D_max_par,  eps_reg)    !!!!шаги сетки менять
+    dt_max_perp = 0.1_wp * dp_perp**2 / max(D_max_perp, eps_reg)    !!!шаги сетки менять
     dt_max = min(dt_max_par, dt_max_perp)
 
     nt = max(1, int(dt_in / dt_max) + 1)
