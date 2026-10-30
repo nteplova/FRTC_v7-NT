@@ -424,7 +424,7 @@ subroutine fp2d_save(time)
         tag = 'nonrel  '
     end if
 
-    write(fname,'("lhcd/f2d/f2d_", A, "_", f9.7, ".bin")') &
+    write(fname,'("lhcd/fp_2d/fp2d_", A, "_", f9.7, ".bin")') &
           trim(tag), time
 
     inquire(file=fname, exist=exist)
