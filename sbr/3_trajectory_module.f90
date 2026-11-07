@@ -130,6 +130,11 @@ subroutine init_trajectories(iw0, spectr)
         tet_count = tet_count + 1
         do inz = 1, spectr%size
             number_of_trajectories = number_of_trajectories+1
+            if (number_of_trajectories>max_number_of_traj) then
+                print *, "number_of_trajectories = ", number_of_trajectories
+                print *, "The limit on the number of trajectories has been exceeded"
+                stop
+            endif     
             current_trajectory => trajectories(number_of_trajectories)
             point = spectr%data(inz)
             call current_trajectory%init(tetin, inz)
@@ -212,7 +217,10 @@ subroutine write_trajectories(tview, ispectr,nnz,ntet) !sav2008
     print *, 'traj file:', fname, delta_time
     if (delta_time<save_interval) then 
         print *,  "skip saving"
-        return
+        if (abs(delta_time - save_interval)>1e-9) then
+            print *,  "skip saving 2"
+           return
+        endif
     endif
     if (ispectr>0) then
         last_time_saving_pos = tview
