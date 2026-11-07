@@ -35,12 +35,12 @@
     "ni1": 20,
     "ni2": 20,
     "niterat": 99,
-    "nmaxm_1": 50,
-    "nmaxm_2": 50,
-    "nmaxm_3": 50,
-    "nmaxm_4": 50,
-    "maxstep2": 1000,
-    "maxstep4": 1000
+    "nmaxm_1": 100,
+    "nmaxm_2": 100,
+    "nmaxm_3": 100,
+    "nmaxm_4": 100,
+    "maxstep2": 10000,
+    "maxstep4": 10000
   },
   "options": {
     "ipri": 2,
@@ -55,8 +55,8 @@
     "upl_value": 0.0,
     "fp_solver": 2,
     "traj_len_seved": -1,
-    "max_number_of_traj": 30000,
-    "max_size_of_traj": 50000,
+    "max_number_of_traj": 50000,
+    "max_size_of_traj": 90000,
     "save_interval": 0.0001
   },
   "grill_parameters": {

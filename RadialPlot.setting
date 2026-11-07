@@ -37,7 +37,8 @@
       "title": "профили температуры",
       "y_label": "Value [arb. unit]",
       "data": [
-        "Te"
+        "Te",
+        "Ne"
       ]
     }
   ]
