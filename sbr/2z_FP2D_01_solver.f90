@@ -114,21 +114,28 @@ subroutine solve_fokker_planck_2d(f, D_QL, dt_in, nt_in)
             call tridiag(ny, ay, by, cy, rhs(i,:), f(i,:))
         end do
         !диагностика
-        if (step == nt) then
-            print *, 'step', step, ' min(f) before clip = ', minval(f), ' max(f) = ', maxval(f)
-        end if
-        ! Защита от отрицательных значений и выбросов
-        block
-            real(wp) :: f_max_val, f_floor
-            f_max_val = maxval(f)
-            f_floor = 1.0e-14_wp * f_max_val
-            do j = 1, ny
-                do i = 1, nx
-                    if (f(i,j) < f_floor) f(i,j) = f_floor
-                    if (f(i,j) > 1.0e10_wp) f(i,j) = 1.0e10_wp
-                end do
+        !  if (step == nt) then
+        !      print *, 'step', step, ' min(f) before clip = ', minval(f), ' max(f) = ', maxval(f)
+        !  end if
+        ! ! Защита от отрицательных значений и выбросов
+         block
+             real(wp) :: f_max_val, f_floor
+             f_max_val = maxval(f)
+             f_floor = 1.0e-20_wp * f_max_val
+             do j = 1, ny
+                 do i = 1, nx
+                     if (f(i,j) < f_floor) f(i,j) = f_floor
+                     if (f(i,j) > 1.0e10_wp) f(i,j) = 1.0e10_wp
+             end do
+             end do
+         end block
+                ! Обрезаем только отрицательные значения (без полки)
+        do j = 1, ny
+            do i = 1, nx
+                if (f(i,j) < 0.0_wp) f(i,j) = 0.0_wp
+                if (f(i,j) > 1.0e10_wp) f(i,j) = 1.0e10_wp
             end do
-        end block
+        end do
     end do
 
     do j = 1, ny

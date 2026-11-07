@@ -233,26 +233,73 @@ subroutine fp2d_driver(dt, nt, use_rel)
 
 end subroutine fp2d_driver
 
-!=======================================================================
+!==========================================================================
+
+! subroutine interp_dql_2d(jr, k)
+!     integer, intent(in) :: jr, k
+!     real(wp) :: p_par, D_val, dij_max
+!     integer  :: i, j, n_nonzero
+
+!     D_QL2D(:,:,jr,k) = 0.0_wp
+!     dij_max = maxval(dij(:,jr,k))
+!     if (dij_max <= 0.0_wp) return
+
+!     n_nonzero = 0
+!     do j = 1, ny
+!         do i = 1, nx
+!             p_par = -p_max + dble(i-1)*dp_par
+
+!             ! Жесткая отсечка по знаку p_par
+!             if (k == 1 .and. p_par < 0.0_wp) cycle
+!             if (k == 2 .and. p_par > 0.0_wp) cycle
+
+!             D_val = integrate_dij_cell(vij(:,jr), dij(:,jr,k), i0, &
+!                                         max(abs(p_par)-0.5_wp*dp_par, 0.0_wp), &
+!                                         abs(p_par)+0.5_wp*dp_par)
+
+!             if (.not. (D_val >= 0.0_wp)) D_val = 0.0_wp
+
+!             if (D_val > 0.0_wp) then
+!                 D_QL2D(i,j,jr,k) = D_QL_scale * D_val
+!                 n_nonzero = n_nonzero + 1
+!             end if
+!         end do
+!     end do
+
+!     if (fp2d_verbose) then
+!         print '(A,I0,A,I0,A,I0,A,ES12.4)', &
+!               '  interp_dql_2d: jr=', jr, '  k=', k, &
+!               '  nnz=', n_nonzero, '  max=', maxval(D_QL2D(:,:,jr,k))
+!     end if
+! end subroutine
+
 subroutine interp_dql_2d(jr, k)
     integer, intent(in) :: jr, k
     real(wp) :: p_par, D_val, dij_max
-    integer  :: i, j, n_nonzero
+    real(wp) :: smooth_factor, width_par
+    integer  :: i, j, n_nonzero, nfilt
+    real(wp) :: D_smooth(nx,ny)
 
     D_QL2D(:,:,jr,k) = 0.0_wp
     dij_max = maxval(dij(:,jr,k))
     if (dij_max <= 0.0_wp) return
 
     n_nonzero = 0
+    ! Узкий переход: D_QL гарантированно обнуляется при p_par = 0
+    width_par = 0.5_wp * dp_par  
+
     do j = 1, ny
         do i = 1, nx
             p_par = -p_max + dble(i-1)*dp_par
 
-            ! k=1 → p_par > 0 ;  k=2 → p_par < 0
-            if (k == 1 .and. p_par < 0.0_wp) cycle
-            if (k == 2 .and. p_par > 0.0_wp) cycle
+            if (k == 1) then
+                smooth_factor = 0.5_wp * (1.0_wp + tanh(p_par / width_par))
+            else
+                smooth_factor = 0.5_wp * (1.0_wp - tanh(p_par / width_par))
+            end if
 
-            ! Усреднение dij по 2D-ячейке — интеграл сохраняется точно
+            if (smooth_factor < 1.0e-8_wp) cycle
+
             D_val = integrate_dij_cell(vij(:,jr), dij(:,jr,k), i0, &
                                         max(abs(p_par)-0.5_wp*dp_par, 0.0_wp), &
                                         abs(p_par)+0.5_wp*dp_par)
@@ -260,11 +307,53 @@ subroutine interp_dql_2d(jr, k)
             if (.not. (D_val >= 0.0_wp)) D_val = 0.0_wp
 
             if (D_val > 0.0_wp) then
-                D_QL2D(i,j,jr,k) = D_QL_scale * D_val
-                n_nonzero = n_nonzero + 1
+                D_QL2D(i,j,jr,k) = D_QL_scale * D_val * smooth_factor
+                if (D_QL2D(i,j,jr,k) > 1.0e-20_wp) n_nonzero = n_nonzero + 1
             end if
         end do
     end do
+
+    ! ! --- 20-кратное 1D сглаживание (только для удаления "пилы") ---
+      do nfilt = 1, 5 !20
+          D_smooth = D_QL2D(:,:,jr,k)
+         do j = 1, ny
+              do i = 2, nx-1
+                  D_QL2D(i,j,jr,k) = 0.25_wp * D_smooth(i-1,j) + &
+                                     0.5_wp  * D_smooth(i,j)   + &
+                                     0.25_wp * D_smooth(i+1,j)
+              end do
+        end do
+      end do
+
+    ! --- Гауссово сглаживание с σ = 1.0 ячейки (физическая ширина) ---
+    ! block
+    ! real(wp) :: D_smooth(nx,ny), kernel(7), sigma, sum_k
+    ! integer  :: ii, jj, kk, offset
+    ! sigma = 1.0_wp
+    ! offset = 3
+    ! sum_k = 0.0_wp
+    ! do kk = -offset, offset
+    !     kernel(kk+offset+1) = exp(-0.5_wp * (dble(kk)/sigma)**2)
+    !     sum_k = sum_k + kernel(kk+offset+1)
+    ! end do
+    ! kernel = kernel / sum_k
+    ! D_smooth = D_QL2D(:,:,jr,k)
+    ! do jj = 1, ny
+    !     do ii = 1, nx
+    !         D_QL2D(ii,jj,jr,k) = 0.0_wp
+    !         do kk = -offset, offset
+    !             if (ii+kk >= 1 .and. ii+kk <= nx) then
+    !                 D_QL2D(ii,jj,jr,k) = D_QL2D(ii,jj,jr,k) + &
+    !                     kernel(kk+offset+1) * D_smooth(ii+kk,jj)
+    !             end if
+    !         end do
+    !     end do
+    ! end do
+    ! end block
+
+    ! Границы
+    D_QL2D(1, :, jr, k) = D_QL2D(2, :, jr, k)
+    D_QL2D(nx, :, jr, k) = D_QL2D(nx-1, :, jr, k)
 
     if (fp2d_verbose) then
         print '(A,I0,A,I0,A,I0,A,ES12.4)', &
@@ -272,6 +361,7 @@ subroutine interp_dql_2d(jr, k)
               '  nnz=', n_nonzero, '  max=', maxval(D_QL2D(:,:,jr,k))
     end if
 end subroutine
+
 
 !=======================================================================
 function integrate_dij_cell(xs, ys, n, x_lo, x_hi) result(y)
@@ -407,7 +497,6 @@ subroutine compute_dfij(jr)
     end do
 end subroutine compute_dfij
 
-!=======================================================================
 subroutine fp2d_save(time)
     real(wp), intent(in) :: time
     character(len=120)   :: fname
@@ -424,25 +513,39 @@ subroutine fp2d_save(time)
         tag = 'nonrel  '
     end if
 
-    write(fname,'("lhcd/fp_2d/fp2d_", A, "_", f9.7, ".bin")') &
-          trim(tag), time
-
+    ! --- Сохранение f2D ---
+    write(fname,'("lhcd/fp_2d/fp2d_", A, "_", f9.7, ".bin")') trim(tag), time
     inquire(file=fname, exist=exist)
-    if (exist) return
-
-    open(iu, file=fname, status='new', action='write', &
-         access='stream', form='unformatted')
-    write(iu) nx, ny, nr
-    write(iu) p_par_grid
-    write(iu) p_perp_grid
-    do jr = 1, nr
-        do k = 1, 2
-            write(iu) f2D(:,:,jr,k)
+    if (.not. exist) then
+        open(iu, file=fname, status='new', action='write', access='stream', form='unformatted')
+        write(iu) nx, ny, nr
+        write(iu) p_par_grid
+        write(iu) p_perp_grid
+        do jr = 1, nr
+            do k = 1, 2
+                write(iu) f2D(:,:,jr,k)
+            end do
         end do
-    end do
-    close(iu)
+        close(iu)
+        print *, 'fp2d_save: written ', trim(fname)
+    end if
 
-    print *, 'fp2d_save: written ', trim(fname)
+    ! --- Сохранение D_QL2D ---
+    write(fname,'("lhcd/fp_2d/DQL_2d_", A, "_", f9.7, ".bin")') trim(tag), time
+    inquire(file=fname, exist=exist)
+    if (.not. exist) then
+        open(iu, file=fname, status='new', action='write', access='stream', form='unformatted')
+        write(iu) nx, ny, nr
+        write(iu) p_par_grid
+        write(iu) p_perp_grid
+        do jr = 1, nr
+            do k = 1, 2
+                write(iu) D_QL2D(:,:,jr,k)
+            end do
+        end do
+        close(iu)
+        print *, 'fp2d_save (DQL): written ', trim(fname)
+    end if
 end subroutine fp2d_save
 
 !=======================================================================
